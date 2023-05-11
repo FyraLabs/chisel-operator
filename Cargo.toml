@@ -1,0 +1,20 @@
+[package]
+name = "chisel-operator"
+version = "0.1.0"
+edition = "2021"
+description = "Chisel tunnel operator for Kubernetes"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+kube = { version = "0.82.2", features = ["runtime", "derive"] }
+k8s-openapi = { version = "0.18.0", features = ["v1_26"] }
+serde = { version = "1.0.162", features = ["derive"] }
+serde_json = "1.0.96"
+serde_yaml = "0.9.21"
+dotenvy = "0.15.7"
+tokio = { version = "1.28.1", features = ["full"] }
+tracing = { version = "0.1.37", features = ["log", "async-await"] }
+color-eyre = "0.6.2"
+schemars = "0.8.12"
+futures = "0.3.28"
