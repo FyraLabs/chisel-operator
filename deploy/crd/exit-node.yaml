@@ -8,10 +8,9 @@ spec:
     categories: []
     kind: ExitNode
     plural: exitnodes
-    shortNames:
-    - exit
+    shortNames: []
     singular: exitnode
-  scope: Cluster
+  scope: Namespaced
   versions:
   - additionalPrinterColumns: []
     name: v1
@@ -23,15 +22,7 @@ spec:
             properties:
               auth:
                 nullable: true
-                properties:
-                  password:
-                    type: string
-                  username:
-                    type: string
-                required:
-                - password
-                - username
-                type: object
+                type: string
               host:
                 type: string
               port:

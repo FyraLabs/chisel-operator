@@ -2,6 +2,16 @@
 
 This is a Kubernetes operator for Chisel. It allows you to use Chisel as a LoadBalancer provider for your Kubernetes cluster, similar to [inlets-operator](https://github.com/inlets/inlets-operator)
 
+## TODO
+
+- [x] Authentication
+- [x] Multiple tunnel services per exit node (so you don't have to pay for multiple VMs)
+- [ ] Extra configuration options
+- [x] TCP/UDP support
+- [ ] Multiple IPs per exit node
+- [ ] Multiple exit nodes support
+- [ ] Cloud provisioner (like inletsctl/inlets-operator)
+
 ## Why?
 
 This project was started due to my frustration with inlets' business model.
@@ -46,7 +56,6 @@ This operator works similarly to inlets-operator. It watches for `LoadBalancer` 
 
 - [Tailscale](https://tailscale.com/) - VPN solution that allows you to connect your devices in one big overlay network. Also has Funnel, a reverse proxy solution that allows you to expose your local service to the internet. Self-hostable control plane is available, but default is to use Tailscale's hosted control plane.
 - ZeroTier - Similar to Tailscale, Under BSD license, Can connect to multiple networks at once.
-- 
 ---
 Find more alternatives [here](https://github.com/anderspitman/awesome-tunneling)
 
@@ -55,7 +64,114 @@ Find more alternatives [here](https://github.com/anderspitman/awesome-tunneling)
 
 Currently, you will need to manually provision a Chisel server on your own exit node.
 
+### Deploying the operator
+
+First, you will need a VPS with a public IP address, that will act as your exit node. You can use any cloud provider you want. Here are some suggestions:
+
+- [DigitalOcean](https://www.digitalocean.com/)
+- [Vultr](https://www.vultr.com/)
+- [Linode](https://www.linode.com/)
+- [Google Cloud](https://cloud.google.com/)
+- [Hetzner](https://www.hetzner.com/)
+- [Contabo](https://contabo.com/)
+
+After purchasing a VPS, you will need to provision Chisel on it.
+
+### Provisioning Chisel
+
+To install Chisel, install the Chisel binary on the machine using this script:
+
+```bash
+curl https://i.jpillora.com/chisel! | bash
+```
+
+**OPTIONAL:** Then you should create a systemd service for Chisel so it can run in the background. Create a file called `/etc/systemd/system/chisel.service` with the following contents:
+
+```ini
+[Unit]
+Description=Chisel Tunnel
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
+
+
+[Service]
+Restart=always
+RestartSec=1
+User=root
+# You can add any additional flags here
+# This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
+ExecStart=/usr/local/bin/chisel server --port=9090 --reverse
+# Additional .env file for auth and secrets
+EnvironmentFile=-/etc/sysconfig/chisel
+```
+
+For security purposes, you should create a `.env` file at `/etc/sysconfig/chisel` (literally) with the following contents:
+
+```env
+# This is the root credentials for the Chisel server. You can change this to whatever you want. Just make sure to keep it a secret.
+# You can also use the `--authfile` argument in the ExecStart command instead of this, for a custom ACL file (in JSON).
+AUTH=user:password
+```
+
+Then run `systemctl daemon-reload` and `systemctl enable --now chisel.service` to enable and start the service.
+
+### Deploying the operator
+
+**NOTE:** This operator is currently in development, breaking changes may occur at any time. It's not ready for production use yet.
+
+INSERT OPERATOR DEPLOYMENT HERE
+
+### Setting up and usage
+
+Create an `ExitNode` resource with the information gained from the previous steps:
+
+```yaml
+apiVersion: chisel-operator.io/v1
+kind: ExitNode
+metadata:
+  name: my-reverse-proxy
+spec:
+  host: 192.168.0.1 # Bring your own IP
+  port: 9090 # The port you set in the service
+  # securing the connection is optional, but recommended
+  # auth:
+  #   username: user # The username you set in the .env file
+  #   password: password # The password you set in the .env file
+```
+
+To use this operator, create a `LoadBalancer` service with no `spec.loadBalancerClass` field or with `spec.loadBalancerClass: "chisel-operator.io"`. The operator will then deploy a Chisel client for that service and expose it on the exit node's IP address. The operator will then manage the service's external IPs and status, and you should be able to use the service as if it was any other LoadBalancer service.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: my-app
+  # loadBalancerClass: chisel-operator.io # Optional, if you're using multiple LoadBalancer operators
+```
+
 MORE INSTRUCTIONS COMING SOON
+
+## Best Practices
+
+You should always secure your Chisel server with a username and password. You can authenticate to the server by creating a secret in the same namespace as the `ExitNode` with a key called `auth`, and setting the `auth` field in the `ExitNode` to the name of the secret. The secret should be a string of `username:password` in plain text.
+
+Currently, you should use the public IP address of your exit node as the `host` field in the `ExitNode` resource. This is because the operator currently does not support using a domain name as the `host` field. This will be fixed in the future.
+
+### Exposing services
+
+It is recommended you use an Ingress controller to expose your services. This greatly simplifies the process for exposing other services, as you only need to expose the Ingress controller's HTTP(S) ports. 
+
 
 ## How do I contribute?
 

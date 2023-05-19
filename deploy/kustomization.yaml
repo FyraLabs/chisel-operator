@@ -1,0 +1,8 @@
+bases:
+- ./crd
+resources:
+- namespace.yaml
+- clusterrole.yaml
+- clusterrolebinding.yaml
+- deployment.yaml
+- serviceaccount.yaml

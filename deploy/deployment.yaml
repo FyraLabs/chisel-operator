@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chisel-operator
+  namespace: chisel-operator-system
+  labels:
+    app: chisel-operator
+spec:
+  selector:
+    matchLabels:
+      app: chisel-operator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: chisel-operator
+    spec:
+      serviceAccountName: chisel-operator
+      containers:
+        - name: chisel-operator
+          image: ghcr.io/fyralabs/chisel-operator:latest
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi

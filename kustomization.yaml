@@ -1,0 +1,4 @@
+namespace: chisel-operator-system
+
+bases:
+  - ./deploy

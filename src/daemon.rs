@@ -1,85 +1,123 @@
 // Daemon module
 // watch for changes in all LoadBalancer services and update the IP addresses
 
-use futures::{StreamExt, TryStreamExt};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::{FieldsV1, ManagedFieldsEntry};
-use kube::api::{ResourceExt, WatchEvent};
-use kube::Resource;
-use std::thread;
-use std::time::Duration;
-
-use k8s_openapi::api::core::v1::Service;
+use color_eyre::Result;
+use futures::StreamExt;
+use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{
-    api::{Api, ListParams, WatchParams},
-    Client,
+    api::{Api, ListParams, Patch, PatchParams, ResourceExt},
+    runtime::{controller::Action, watcher::Config, Controller},
+    Client, Resource,
 };
+use std::sync::Arc;
 
-use crate::ops::{ExitNode, RemoteTunnel};
+use std::time::Duration;
+use thiserror::Error;
+use tracing::{info, instrument};
 
-pub async fn process_svcs(mut service: Service) {
-    let client = Client::try_default().await.unwrap();
-    let tunnels: Api<ExitNode> = Api::all(client);
+use crate::deployment::create_owned_deployment;
+use crate::ops::ExitNode;
 
-    let lp = ListParams::default().timeout(30);
-    let node_list = tunnels.list(&lp).await.unwrap();
+#[derive(Error, Debug)]
+pub enum ReconcileError {}
 
-    // We will only be supporting 1 exit node for all services for now, so we can just grab the first one
-    let node: &ExitNode = node_list.items.first().unwrap();
-
-    // set managed fields if not already set
-    let mut managed_fields = service.managed_fields_mut();
-
-    // find managed field for this controller
-    let managed_field = managed_fields.iter_mut().find(|mf| {
-        mf.api_version == Some(RemoteTunnel::api_version(&()).to_string())
-            && mf.manager == Some("chisel-operator".to_string())
-    });
-    if let None = managed_field {
-        let mf = ManagedFieldsEntry {
-            api_version: Some(RemoteTunnel::api_version(&()).to_string()),
-            fields_type: Some("FieldsV1".to_string()),
-            fields_v1: Some(FieldsV1(
-                serde_json::json!({
-                    "spec": {
-                        "externalIPs": {}
-                    },
-                    "status": {
-                        "loadBalancer": {
-                            "ingress": {}
-                        }
-                    }
-                })
-                .clone(),
-            )),
-            subresource: Some("status".to_string()),
-            manager: Some("chisel-operator".to_string()),
-            operation: Some("Update".to_string()),
-            ..Default::default()
-        };
-        managed_fields.push(mf);
+#[instrument(skip(_ctx))]
+async fn reconcile(obj: Arc<Service>, _ctx: Arc<()>) -> Result<Action, ReconcileError> {
+    if obj
+        .spec
+        .as_ref()
+        .filter(|spec| spec.type_ == Some("LoadBalancer".to_string()))
+        .is_none()
+    {
+        return Ok(Action::await_change());
     }
+
+    info!("reconcile request: {}", obj.name_any());
+    // We will only be supporting 1 exit node for all services for now, so we can just grab the first one
+
+    let client = Client::try_default().await.unwrap();
+    let nodes: Api<ExitNode> = Api::all(client.clone());
+    let lp = ListParams::default().timeout(30);
+    let services: Api<Service> = Api::namespaced(client.clone(), &obj.namespace().unwrap());
+    let node_list = nodes.list(&lp).await.unwrap();
+    let node = node_list.items.first();
+
+    tracing::debug!("node: {:?}", node);
+
+    let deployments: Api<Deployment> = Api::namespaced(client, &node.unwrap().namespace().unwrap());
+
+    // TODO: make it DRY
+
+    let ingress = match node.map(|n| n.spec.host.clone()) {
+        Some(host) => serde_json::json!([{ "ip": host }]),
+        None => serde_json::json!([]),
+    };
+    let external_ip = match node.map(|n| n.spec.host.clone()) {
+        Some(host) => serde_json::json!([host]),
+        None => serde_json::json!([]),
+    };
+
+    let spec_patch = serde_json::json!({"spec": {
+        "loadBalancerIP": node.map(|n| n.spec.host.clone()),
+        "externalIPs": external_ip,
+    }
+    });
+    // set spec params
+
+    let service = services
+        .patch(
+            obj.meta().name.as_ref().unwrap(),
+            &PatchParams::default(),
+            &Patch::Merge(spec_patch),
+        )
+        .await
+        .unwrap();
+
+    let deployment_data = create_owned_deployment(&service, &node.unwrap());
+    let serverside = PatchParams::apply("chisel-operator");
+    let _deployment = deployments
+        .patch(
+            &deployment_data.name_any(),
+            &serverside,
+            &Patch::Apply(deployment_data),
+        )
+        .await
+        .unwrap();
+
+    // set status
+    let status_data = serde_json::json!({"status": {
+        "message": "Chisel LoadBalancer Reconciled successfully",
+        "loadBalancer": {
+            "ingress": ingress
+        }
+    }});
+    info!(status = ?status_data, "Patched status for {}", obj.name_any());
+
+    services
+        .patch_status(
+            obj.meta().name.as_ref().unwrap(),
+            &PatchParams::default(),
+            &Patch::Merge(status_data),
+        )
+        .await
+        .unwrap();
+
+    Ok(Action::requeue(Duration::from_secs(3600)))
+}
+
+fn error_policy(_object: Arc<Service>, _err: &ReconcileError, _ctx: Arc<()>) -> Action {
+    Action::requeue(Duration::from_secs(5))
 }
 
 pub async fn run() -> color_eyre::Result<()> {
     let client = Client::try_default().await.unwrap();
     // watch for K8s service resources (default)
     let services: Api<Service> = Api::all(client);
-    let lp = WatchParams::default()
-        // .fields("spec.type=LoadBalancer")
-        .timeout(0);
-    loop {
-        let mut stream = services.watch(&lp, "0").await?.boxed();
-        while let Ok(Some(status)) = stream.try_next().await {
-            match status {
-                WatchEvent::Added(s) => println!("Added {:?}", s),
-                WatchEvent::Modified(s) => println!("Modified: {:?}", s),
-                WatchEvent::Deleted(s) => println!("Deleted {:?}", s),
-                WatchEvent::Bookmark(_) => {}
-                WatchEvent::Error(s) => println!("{:?}", s),
-            }
-        }
-        thread::sleep(Duration::from_secs(30));
-    }
 
-    // Ok(())
+    Controller::new(services, Config::default())
+        .run(reconcile, error_policy, Arc::new(()))
+        .for_each(|_| futures::future::ready(()))
+        .await;
+
+    Ok(())
 }
