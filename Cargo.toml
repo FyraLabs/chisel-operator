@@ -9,6 +9,17 @@ authors = [
 ]
 categories = ["Network programming", "Configuration"]
 license = "MIT"
+keywords = [
+    "kubernetes",
+    "tunnel",
+    "chisel",
+    "k8s-operator",
+    "operator",
+    "http",
+    "tcp",
+    "udp",
+    "networking",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -20,8 +20,6 @@ inlets used to be an open-source reverse-proxy-over-WebSockets solution that let
 
 However, inlets has recently switched to a closed-source model, where the only way to use it is to pay for an inlets PRO license. This is a huge turn-off for me, and many others, as it is no longer a viable solution for hobbyists and small businesses on a budget.
 
-Even worse, OpenFaaS has taken over the inlets project and has deleted the source code for the open-source version of inlets. This is a huge red flag for me, as it means that this project is no longer open-source, and is now a proprietary solution.
-
 I do not want to pay a 25$ monthly fee on top of the reverse proxy VPS that I am already paying for, so I decided to make my own solution.
 
 This project will never have a profit incentive, and will always be open-source. I simply want to make a solution that is FOSS, and share it with the world because I believe that it will be useful to many people.
@@ -66,7 +64,7 @@ Currently, you will need to manually provision a Chisel server on your own exit 
 
 ### Deploying the operator
 
-First, you will need a VPS with a public IP address, that will act as your exit node. You can use any cloud provider you want. Here are some suggestions:
+First, you will need a VPS with a public IP address that will act as your exit node. You can use any cloud provider you want. Here are some suggestions:
 
 - [DigitalOcean](https://www.digitalocean.com/)
 - [Vultr](https://www.vultr.com/)
@@ -85,7 +83,7 @@ To install Chisel, install the Chisel binary on the machine using this script:
 curl https://i.jpillora.com/chisel! | bash
 ```
 
-**OPTIONAL:** Then you should create a systemd service for Chisel so it can run in the background. Create a file called `/etc/systemd/system/chisel.service` with the following contents:
+**OPTIONAL:** You should create a systemd service for Chisel so it can run in the background. Create a file called `/etc/systemd/system/chisel.service` with the following contents:
 
 ```ini
 [Unit]
@@ -123,7 +121,11 @@ Then run `systemctl daemon-reload` and `systemctl enable --now chisel.service` t
 
 **NOTE:** This operator is currently in development, breaking changes may occur at any time. It's not ready for production use yet.
 
-INSERT OPERATOR DEPLOYMENT HERE
+To install the operator, deploy the kustomization config from this repository:
+
+```bash
+kubectl apply -k https://github.com/FyraLabs/chisel-operator
+```
 
 ### Setting up and usage
 
