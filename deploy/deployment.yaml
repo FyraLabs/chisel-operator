@@ -16,9 +16,13 @@ spec:
         app: chisel-operator
     spec:
       serviceAccountName: chisel-operator
+      automountServiceAccountToken: true
       containers:
         - name: chisel-operator
-          image: ghcr.io/fyralabs/chisel-operator:latest
+          image: ghcr.io/fyralabs/chisel-operator:main
+          env:
+            - name: RUST_LOG
+              value: "debug"
           resources:
             requests:
               cpu: 100m

@@ -1,6 +1,6 @@
-bases:
-- ./crd
+
 resources:
+- ./crd
 - namespace.yaml
 - clusterrole.yaml
 - clusterrolebinding.yaml

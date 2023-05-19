@@ -3,6 +3,6 @@ kind: ClusterRole
 metadata:
   name: chisel-operator
 rules:
-  - apiGroups: [""]
+  - apiGroups: ["*"]
     resources: ["*"]
     verbs: ["*"]
