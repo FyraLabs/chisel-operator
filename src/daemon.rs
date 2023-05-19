@@ -18,11 +18,28 @@ use tracing::{info, instrument};
 use crate::deployment::create_owned_deployment;
 use crate::ops::ExitNode;
 
+// pub fn get_trace_id() -> opentelemetry::trace::TraceId {
+//     // opentelemetry::Context -> opentelemetry::trace::Span
+//     use opentelemetry::trace::TraceContextExt as _;
+//     // tracing::Span -> opentelemetry::Context
+//     use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+
+//     tracing::Span::current()
+//         .context()
+//         .span()
+//         .span_context()
+//         .trace_id()
+// }
+
 #[derive(Error, Debug)]
 pub enum ReconcileError {}
 
+// #[instrument(skip(_ctx), fields(trace_id))]
 #[instrument(skip(_ctx))]
 async fn reconcile(obj: Arc<Service>, _ctx: Arc<()>) -> Result<Action, ReconcileError> {
+    // let trace_id = get_trace_id();
+    // Span::current().record("trace_id", &field::display(&trace_id));
+
     if obj
         .spec
         .as_ref()

@@ -15,6 +15,20 @@ use k8s_openapi::{
 use kube::{api::ResourceExt, core::ObjectMeta, Resource};
 use tracing::{debug, info};
 
+/// The function takes a ServicePort struct and returns a string representation of the port number and
+/// protocol (if specified).
+///
+/// Arguments:
+///
+/// * `svcport`: `svcport` is a variable of type `ServicePort`, which is likely a struct or enum that
+/// represents a service port in a network application. The function `convert_service_port` takes this
+/// `svcport` as input and returns a string representation of the port number and protocol (if
+/// specified).
+///
+/// Returns:
+///
+/// a string that represents the service port. The string contains the port number and, if applicable,
+/// the protocol (TCP or UDP) in the format "port/protocol".
 fn convert_service_port(svcport: ServicePort) -> String {
     let mut port = String::new();
 
@@ -32,6 +46,19 @@ fn convert_service_port(svcport: ServicePort) -> String {
     port
 }
 
+/// This function generates a remote argument string using an ExitNode's host and port information.
+///
+/// Arguments:
+///
+/// * `node`: `node` is a reference to an `ExitNode` struct, which contains information about a specific
+/// exit node in a network. The function `generate_remote_arg` takes this node as input and generates a
+/// remote argument that can be used to connect to the exit node.
+///
+/// Returns:
+///
+/// The function `generate_remote_arg` is returning a `Result` containing a `String`. The `String`
+/// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
+/// values obtained from the `node` parameter.
 pub fn generate_remote_arg(node: &ExitNode) -> Result<String> {
     // get chisel host from config
     let lb_ip = &node.spec.host;
@@ -42,6 +69,18 @@ pub fn generate_remote_arg(node: &ExitNode) -> Result<String> {
     Ok(format!("{}:{}", lb_ip, chisel_port))
 }
 
+/// This function generates arguments for a tunnel based on a given service.
+///
+/// Arguments:
+///
+/// * `svc`: `svc` is a reference to a `Service` object, which represents a set of pods that provide a
+/// common network service. The function `generate_tunnel_args` takes this `Service` object as input and
+/// generates a set of arguments that can be used to create a tunnel to the service.
+///
+/// Returns:
+///
+/// a `Result` containing a `Vec` of `String`s. The `Vec` contains arguments for a tunnel, which are
+/// generated based on the input `Service`.
 pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>> {
     let service_name = svc.metadata.name.clone().unwrap();
     let service_namespace = svc.namespace().unwrap();
@@ -72,13 +111,29 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>> {
                 format!("{}.{}", service_name, service_namespace),
                 convert_service_port(p.clone())
             )
-        }).collect();
+        })
+        .collect();
 
     info!("Generated arguments: {:?}", ports);
     debug!(svc = ?svc, "Source service");
     Ok(ports)
 }
 
+/// This function creates a PodTemplateSpec for a chisel container to be used as a tunnel between a
+/// source service and an exit node.
+///
+/// Arguments:
+///
+/// * `source`: The `source` parameter is a reference to a `Service` object, which represents a set of
+/// pods that provide a single, stable network endpoint for accessing a Kubernetes service.
+/// * `exit_node`: `exit_node` is a reference to an `ExitNode` struct, which contains information about
+/// the exit node that the pod will connect to. This includes the exit node's IP address, port, and
+/// authentication credentials. The `generate_remote_arg` function is used to generate the command line
+/// argument that
+///
+/// Returns:
+///
+/// a `PodTemplateSpec` object.
 pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplateSpec {
     let mut args = vec![
         "client".to_string(),
@@ -126,6 +181,19 @@ pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplat
     }
 }
 
+/// The function creates a deployment object for a service and exit node in Rust programming language.
+///
+/// Arguments:
+///
+/// * `source`: The `source` parameter is a reference to a `Service` object, which represents a set of
+/// pods that perform the same function and are exposed by a common IP address and port.
+/// * `exit_node`: An ExitNode is a node in a network that allows traffic to exit the network and reach
+/// external services. In this context, it is likely being used to specify the node that the deployment
+/// will be running on.
+///
+/// Returns:
+///
+/// a `Deployment` object.
 pub fn create_owned_deployment(source: &Service, exit_node: &ExitNode) -> Deployment {
     let oref = source.controller_owner_ref(&()).unwrap();
 

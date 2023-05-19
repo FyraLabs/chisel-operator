@@ -2,6 +2,7 @@ FROM rust:alpine as build-env
 RUN apk add --no-cache openssl-dev
 WORKDIR /app
 COPY . /app
+ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 RUN cargo build --release
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates openssl
