@@ -1,6 +1,6 @@
 FROM rust:latest as build-env
 RUN apt update
-RUN apt install -y openssl-dev
+RUN apt install -y libssl-dev
 WORKDIR /app
 COPY . /app
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
@@ -12,6 +12,6 @@ RUN cp /app/target/release/chisel-operator /app/chisel-operator
 
 FROM rust:latest
 RUN apt update
-RUN apt install -y ca-certificates openssl
+RUN apt install -y ca-certificates libssl
 COPY --from=build-env /app/chisel-operator /usr/bin/chisel-operator
 CMD ["chisel-operator"]
