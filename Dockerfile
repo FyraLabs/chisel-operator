@@ -1,5 +1,5 @@
 FROM rust:alpine as build-env
-RUN apk add --no-cache openssl-dev
+RUN apk add --no-cache openssl-dev musl-dev
 WORKDIR /app
 COPY . /app
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
