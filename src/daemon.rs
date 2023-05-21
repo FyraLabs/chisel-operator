@@ -41,11 +41,20 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // let trace_id = get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));
 
+    // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to "chisel-operator.io/chisel-operator-class"
     if obj
         .spec
         .as_ref()
         .filter(|spec| spec.type_ == Some("LoadBalancer".to_string()))
         .is_none()
+        || obj
+            .spec
+            .as_ref()
+            .filter(|spec| {
+                spec.load_balancer_class.is_none()
+                    || spec.load_balancer_class == Some("chisel-operator.io/chisel-operator-class".to_string())
+            })
+            .is_none()
     {
         return Ok(Action::await_change());
     }

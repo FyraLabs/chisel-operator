@@ -140,12 +140,10 @@ spec:
   host: 192.168.0.1 # Bring your own IP
   port: 9090 # The port you set in the service
   # securing the connection is optional, but recommended
-  # auth:
-  #   username: user # The username you set in the .env file
-  #   password: password # The password you set in the .env file
+  # auth: # The name of a secret containing username and password keys
 ```
 
-To use this operator, create a `LoadBalancer` service with no `spec.loadBalancerClass` field or with `spec.loadBalancerClass: "chisel-operator.io"`. The operator will then deploy a Chisel client for that service and expose it on the exit node's IP address. The operator will then manage the service's external IPs and status, and you should be able to use the service as if it was any other LoadBalancer service.
+To use this operator, create a `LoadBalancer` service with no `spec.loadBalancerClass` field or with `spec.loadBalancerClass: "chisel-operator.io/chisel-operator-class"`. The operator will then deploy a Chisel client for that service and expose it on the exit node's IP address. The operator will then manage the service's external IPs and status, and you should be able to use the service as if it was any other LoadBalancer service.
 
 ```yaml
 apiVersion: v1
@@ -159,7 +157,7 @@ spec:
       targetPort: 8080
   selector:
     app: my-app
-  # loadBalancerClass: chisel-operator.io # Optional, if you're using multiple LoadBalancer operators
+  # loadBalancerClass: chisel-operator.io/chisel-operator-class # Optional, if you're using multiple LoadBalancer operators
 ```
 
 MORE INSTRUCTIONS COMING SOON
