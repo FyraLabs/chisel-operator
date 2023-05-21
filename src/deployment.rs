@@ -1,6 +1,6 @@
 //! Chisel pod deployment
 
-use crate::ops::ExitNode;
+use crate::{error::ReconcileError, ops::ExitNode};
 use color_eyre::Result;
 use k8s_openapi::{
     api::{
@@ -59,14 +59,8 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// The function `generate_remote_arg` is returning a `Result` containing a `String`. The `String`
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
-pub fn generate_remote_arg(node: &ExitNode) -> Result<String> {
-    // get chisel host from config
-    let lb_ip = &node.spec.host;
-
-    // get chisel port from config
-    let chisel_port = node.spec.port;
-
-    Ok(format!("{}:{}", lb_ip, chisel_port))
+pub fn generate_remote_arg(node: &ExitNode) -> String {
+    format!("{}:{}", node.spec.host, node.spec.port)
 }
 
 /// This function generates arguments for a tunnel based on a given service.
@@ -81,8 +75,10 @@ pub fn generate_remote_arg(node: &ExitNode) -> Result<String> {
 ///
 /// a `Result` containing a `Vec` of `String`s. The `Vec` contains arguments for a tunnel, which are
 /// generated based on the input `Service`.
-pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>> {
+pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError> {
+    // We can unwrap safely since Service is guaranteed to have a name
     let service_name = svc.metadata.name.clone().unwrap();
+    // We can unwrap safely since Service is namespaced scoped
     let service_namespace = svc.namespace().unwrap();
 
     // check if there's a custom IP set
@@ -95,13 +91,14 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>> {
 
     let target_ip = "R";
 
+    // We can unwrap safely since Service is guaranteed to have a spec
     let ports = svc
         .spec
         .as_ref()
         .unwrap()
         .ports
         .as_ref()
-        .unwrap()
+        .ok_or(ReconcileError::NoPortsSet)?
         .iter()
         .map(|p| {
             format!(
@@ -134,18 +131,19 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>> {
 /// Returns:
 ///
 /// a `PodTemplateSpec` object.
-pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplateSpec {
+pub fn create_pod_template(
+    source: &Service,
+    exit_node: &ExitNode,
+) -> Result<PodTemplateSpec, ReconcileError> {
+    // We can unwrap safely since Service is guaranteed to have a name
+    let service_name = source.metadata.name.as_ref().unwrap();
+
     let mut args = vec![
         "client".to_string(),
         "-v".to_string(),
-        generate_remote_arg(exit_node).unwrap(),
+        generate_remote_arg(exit_node),
     ];
-    args.extend(
-        generate_tunnel_args(source)
-            .unwrap()
-            .iter()
-            .map(|s| s.to_string()),
-    );
+    args.extend(generate_tunnel_args(source)?.iter().map(|s| s.to_string()));
 
     let env = exit_node.spec.auth.clone().map(|secret_name| {
         vec![EnvVar {
@@ -162,9 +160,9 @@ pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplat
         }]
     });
 
-    PodTemplateSpec {
+    Ok(PodTemplateSpec {
         metadata: Some(ObjectMeta {
-            labels: Some([("tunnel".to_string(), source.metadata.name.clone().unwrap())].into()),
+            labels: Some([("tunnel".to_string(), service_name.to_owned())].into()),
             ..Default::default()
         }),
         spec: Some(PodSpec {
@@ -178,7 +176,7 @@ pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplat
             ..Default::default()
         }),
         ..Default::default()
-    }
+    })
 }
 
 /// The function creates a deployment object for a service and exit node in Rust programming language.
@@ -194,25 +192,29 @@ pub fn create_pod_template(source: &Service, exit_node: &ExitNode) -> PodTemplat
 /// Returns:
 ///
 /// a `Deployment` object.
-pub fn create_owned_deployment(source: &Service, exit_node: &ExitNode) -> Deployment {
+pub fn create_owned_deployment(
+    source: &Service,
+    exit_node: &ExitNode,
+) -> Result<Deployment, ReconcileError> {
+    // We can unwrap safely since this object is from the API server
     let oref = source.controller_owner_ref(&()).unwrap();
+    // We can unwrap safely since Service is guaranteed to have a name
+    let service_name = source.metadata.name.as_ref().unwrap();
 
-    Deployment {
+    Ok(Deployment {
         metadata: ObjectMeta {
-            name: Some(format!("chisel-{}", source.metadata.name.clone().unwrap())),
+            name: Some(format!("chisel-{}", service_name)),
             owner_references: Some(vec![oref]),
             ..ObjectMeta::default()
         },
         spec: Some(DeploymentSpec {
-            template: create_pod_template(source, exit_node),
+            template: create_pod_template(source, exit_node)?,
             selector: LabelSelector {
-                match_labels: Some(
-                    [("tunnel".to_string(), source.metadata.name.clone().unwrap())].into(),
-                ),
+                match_labels: Some([("tunnel".to_string(), service_name.to_owned())].into()),
                 ..Default::default()
             },
             ..Default::default()
         }),
         ..Default::default()
-    }
+    })
 }

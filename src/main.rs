@@ -1,5 +1,4 @@
 use color_eyre::Result;
-use kube::CustomResourceExt;
 // use opentelemetry::sdk::export::metrics::StdoutExporterBuilder;
 // use opentelemetry_api::trace::{
 //     noop::{NoopTracer, NoopTracerProvider},
@@ -10,6 +9,7 @@ use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 // Main entrypoint for operator
 mod daemon;
 mod deployment;
+mod error;
 mod ops;
 
 // TODO: OpenTelemetry is broken
@@ -50,29 +50,15 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     dotenvy::dotenv().ok();
 
-    let logger = tracing_subscriber::fmt::layer().json();
-    let env_filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .unwrap();
+    let logger = tracing_logfmt::layer();
+    let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?;
 
     // let telemetry = tracing_opentelemetry::layer().with_tracer(init_tracer().await);
     let collector = Registry::default()
         // .with(telemetry)
         .with(logger)
         .with(env_filter);
-    tracing::subscriber::set_global_default(collector).unwrap();
+    tracing::subscriber::set_global_default(collector)?;
 
-    // create crd
-
-    println!("Creating CRD");
-    println!(
-        "crd for node:\n{}",
-        serde_yaml::to_string(&ops::ExitNode::crd()).unwrap()
-    );
-    // println!(
-    //     "crd for tunnel:\n{}",
-    //     serde_yaml::to_string(&ops::RemoteTunnel::crd()).unwrap()
-    // );
-    daemon::run().await?;
-    Ok(())
+    daemon::run().await
 }

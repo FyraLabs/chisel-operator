@@ -12,11 +12,10 @@ use kube::{
 use std::sync::Arc;
 
 use std::time::Duration;
-use thiserror::Error;
 use tracing::{info, instrument};
 
-use crate::deployment::create_owned_deployment;
 use crate::ops::ExitNode;
+use crate::{deployment::create_owned_deployment, error::ReconcileError};
 
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
 //     // opentelemetry::Context -> opentelemetry::trace::Span
@@ -31,12 +30,14 @@ use crate::ops::ExitNode;
 //         .trace_id()
 // }
 
-#[derive(Error, Debug)]
-pub enum ReconcileError {}
+struct Context {
+    client: Client,
+}
 
-// #[instrument(skip(_ctx), fields(trace_id))]
-#[instrument(skip(_ctx))]
-async fn reconcile(obj: Arc<Service>, _ctx: Arc<()>) -> Result<Action, ReconcileError> {
+// #[instrument(skip(ctx), fields(trace_id))]
+/// Reconcile cluster state
+#[instrument(skip(ctx))]
+async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     // let trace_id = get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));
 
@@ -50,47 +51,25 @@ async fn reconcile(obj: Arc<Service>, _ctx: Arc<()>) -> Result<Action, Reconcile
     }
 
     info!("reconcile request: {}", obj.name_any());
-    // We will only be supporting 1 exit node for all services for now, so we can just grab the first one
 
-    let client = Client::try_default().await.unwrap();
-    let nodes: Api<ExitNode> = Api::all(client.clone());
-    let lp = ListParams::default().timeout(30);
-    let services: Api<Service> = Api::namespaced(client.clone(), &obj.namespace().unwrap());
-    let node_list = nodes.list(&lp).await.unwrap();
-    let node = node_list.items.first();
+    // We can unwrap safely since Service is namespaced scoped
+    let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
+    // We will only be supporting 1 exit node for all services for now, so we can just grab the first one
+    let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
+    let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+    let node = node_list
+        .items
+        .first()
+        .ok_or(ReconcileError::NoAvailableExitNodes)?;
 
     tracing::debug!("node: {:?}", node);
 
-    let deployments: Api<Deployment> = Api::namespaced(client, &node.unwrap().namespace().unwrap());
+    // We can unwrap safely since ExitNode is namespaced scoped
+    let deployments: Api<Deployment> =
+        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
 
-    // TODO: make it DRY
-
-    let ingress = match node.map(|n| n.spec.host.clone()) {
-        Some(host) => serde_json::json!([{ "ip": host }]),
-        None => serde_json::json!([]),
-    };
-    let external_ip = match node.map(|n| n.spec.host.clone()) {
-        Some(host) => serde_json::json!([host]),
-        None => serde_json::json!([]),
-    };
-
-    let spec_patch = serde_json::json!({"spec": {
-        "loadBalancerIP": node.map(|n| n.spec.host.clone()),
-        "externalIPs": external_ip,
-    }
-    });
-    // set spec params
-
-    let service = services
-        .patch(
-            obj.meta().name.as_ref().unwrap(),
-            &PatchParams::default(),
-            &Patch::Merge(spec_patch),
-        )
-        .await
-        .unwrap();
-
-    let deployment_data = create_owned_deployment(&service, &node.unwrap());
+    let deployment_data = create_owned_deployment(&obj, &node)?;
     let serverside = PatchParams::apply("chisel-operator");
     let _deployment = deployments
         .patch(
@@ -98,41 +77,43 @@ async fn reconcile(obj: Arc<Service>, _ctx: Arc<()>) -> Result<Action, Reconcile
             &serverside,
             &Patch::Apply(deployment_data),
         )
-        .await
-        .unwrap();
+        .await?;
 
-    // set status
+    // Update the status for the LoadBalancer service
+    // The ExitNode IP will always be set, so it is safe to unwrap the host
     let status_data = serde_json::json!({"status": {
-        "message": "Chisel LoadBalancer Reconciled successfully",
+        "message": "Chisel LoadBalancer reconciled successfully",
         "loadBalancer": {
-            "ingress": ingress
+            "ingress": [{ "ip": node.spec.host }]
         }
     }});
-    info!(status = ?status_data, "Patched status for {}", obj.name_any());
 
     services
         .patch_status(
+            // We can unwrap safely since Service is guaranteed to have a name
             obj.meta().name.as_ref().unwrap(),
-            &PatchParams::default(),
-            &Patch::Merge(status_data),
+            &serverside.force(),
+            &Patch::Merge(status_data.clone()),
         )
-        .await
-        .unwrap();
+        .await?;
+
+    info!(status = ?status_data, "Patched status for {}", obj.name_any());
 
     Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
-fn error_policy(_object: Arc<Service>, _err: &ReconcileError, _ctx: Arc<()>) -> Action {
+fn error_policy(_object: Arc<Service>, _err: &ReconcileError, _ctx: Arc<Context>) -> Action {
     Action::requeue(Duration::from_secs(5))
 }
 
+/// watches for Kubernetes service resources and runs a controller to reconcile them.
 pub async fn run() -> color_eyre::Result<()> {
-    let client = Client::try_default().await.unwrap();
+    let client = Client::try_default().await?;
     // watch for K8s service resources (default)
-    let services: Api<Service> = Api::all(client);
+    let services: Api<Service> = Api::all(client.clone());
 
     Controller::new(services, Config::default())
-        .run(reconcile, error_policy, Arc::new(()))
+        .run(reconcile, error_policy, Arc::new(Context { client }))
         .for_each(|_| futures::future::ready(()))
         .await;
 
