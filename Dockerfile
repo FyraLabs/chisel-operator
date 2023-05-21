@@ -9,8 +9,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/app/target \
     cargo build --release && cp /app/target/release/chisel-operator /app/chisel-operator
 
-FROM rust:latest
-RUN apt update
-RUN apt install -y ca-certificates openssl
+FROM redhat/ubi9:latest
 COPY --from=build-env /app/chisel-operator /usr/bin/chisel-operator
 CMD ["chisel-operator"]
