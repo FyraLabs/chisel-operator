@@ -62,6 +62,13 @@ Find more alternatives [here](https://github.com/anderspitman/awesome-tunneling)
 
 Currently, you will need to manually provision a Chisel server on your own exit node.
 
+## Cluster Installation
+
+Install using the Kustomize config:
+```bash
+kubectl install -k https://github.com/FyraLabs/chisel-operator
+```
+
 ### Deploying the operator
 
 First, you will need a VPS with a public IP address that will act as your exit node. You can use any cloud provider you want. Here are some suggestions:
