@@ -66,7 +66,7 @@ Currently, you will need to manually provision a Chisel server on your own exit 
 
 Install using the Kustomize config:
 ```bash
-kubectl install -k https://github.com/FyraLabs/chisel-operator
+kubectl apply -k https://github.com/FyraLabs/chisel-operator
 ```
 
 ### Deploying the operator
