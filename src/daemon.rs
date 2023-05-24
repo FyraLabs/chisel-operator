@@ -91,7 +91,6 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // Update the status for the LoadBalancer service
     // The ExitNode IP will always be set, so it is safe to unwrap the host
     let status_data = serde_json::json!({"status": {
-        "message": "Chisel LoadBalancer reconciled successfully",
         "loadBalancer": {
             "ingress": [{ "ip": node.spec.host }]
         }
