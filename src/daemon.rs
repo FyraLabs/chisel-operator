@@ -7,12 +7,12 @@ use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
     runtime::{controller::Action, watcher::Config, Controller},
-    Client, Resource,
+    Client,
 };
 use std::sync::Arc;
 
 use std::time::Duration;
-use tracing::{debug, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::ops::ExitNode;
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
@@ -106,34 +106,18 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
         .patch_status(
             // We can unwrap safely since Service is guaranteed to have a name
             obj.name_any().as_str(),
-            &serverside.clone().force(),
+            &serverside.clone(),
             &Patch::Merge(status_data.clone()),
         )
         .await?;
 
     info!(status = ?status_data, "Patched status for {}", obj.name_any());
 
-    let svc_data = serde_json::json!({
-        "spec": {
-            "externalIPs": [ip_address]
-        }
-    });
-
-    debug!("Patching spec for {}", obj.name_any());
-    let svc_spec = services
-        .patch(
-            // We can unwrap safely since Service is guaranteed to have a name
-            obj.name_any().as_str(),
-            &serverside,
-            &Patch::Merge(svc_data),
-        )
-        .await?;
-
-    debug!(spec = ?svc_spec, "Patched spec for {}", obj.name_any());
     Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
-fn error_policy(_object: Arc<Service>, _err: &ReconcileError, _ctx: Arc<Context>) -> Action {
+fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>) -> Action {
+    error!(err = ?err);
     Action::requeue(Duration::from_secs(5))
 }
 
