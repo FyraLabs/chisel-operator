@@ -56,7 +56,7 @@ fn convert_service_port(svcport: ServicePort) -> String {
 ///
 /// Returns:
 ///
-/// The function `generate_remote_arg` is returning a `Result` containing a `String`. The `String`
+/// The function `generate_remote_arg` is returning a `String`. The `String`
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
 pub fn generate_remote_arg(node: &ExitNode) -> String {
@@ -116,6 +116,30 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
     Ok(ports)
 }
 
+/// This function generates Chisel flags using various options set on an ExitNode's spec.
+///
+/// Arguments:
+///
+/// * `node`: `node` is a reference to an `ExitNode` struct, which contains information about a specific
+/// exit node in a network. The function `generate_remote_arg` takes this node as input and generates a
+/// Chisel flags that are used when connecting to the exit node.
+///
+/// Returns:
+///
+/// The function `generate_chisel_flags` is returning `Vec` of `String`s.
+/// The `Vec` contains chisel flags for the client, which are
+/// generated based on the input `ExitNode`'s spec.
+pub fn generate_chisel_flags(node: &ExitNode) -> Vec<String> {
+    let mut flags = vec!["-v".to_string()];
+
+    if let Some(fingerprint) = node.spec.fingerprint.to_owned() {
+        flags.push("--fingerprint".to_string());
+        flags.push(fingerprint)
+    }
+
+    flags
+}
+
 /// This function creates a PodTemplateSpec for a chisel container to be used as a tunnel between a
 /// source service and an exit node.
 ///
@@ -138,11 +162,9 @@ pub fn create_pod_template(
     // We can unwrap safely since Service is guaranteed to have a name
     let service_name = source.metadata.name.as_ref().unwrap();
 
-    let mut args = vec![
-        "client".to_string(),
-        "-v".to_string(),
-        generate_remote_arg(exit_node),
-    ];
+    let mut args = vec!["client".to_string()];
+    args.extend(generate_chisel_flags(exit_node));
+    args.push(generate_remote_arg(exit_node));
     args.extend(generate_tunnel_args(source)?.iter().map(|s| s.to_string()));
 
     let env = exit_node.spec.auth.clone().map(|secret_name| {

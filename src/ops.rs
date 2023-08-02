@@ -18,6 +18,8 @@ pub struct ExitNodeSpec {
     pub host: String,
     /// Control plane port of the chisel server
     pub port: u16,
+    /// Optional but highly recommended fingerprint to perform host-key validation against the server's public key
+    pub fingerprint: Option<String>,
     /// Optional authentication secret name to connect to the control plane
     pub auth: Option<String>,
 }

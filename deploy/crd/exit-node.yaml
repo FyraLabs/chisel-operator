@@ -25,6 +25,10 @@ spec:
                 description: Optional authentication secret name to connect to the control plane
                 nullable: true
                 type: string
+              fingerprint:
+                description: Optional but highly recommended fingerprint to perform host-key validation against the server's public key
+                nullable: true
+                type: string
               host:
                 description: Hostname or IP address of the chisel server
                 type: string
