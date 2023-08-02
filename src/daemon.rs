@@ -79,6 +79,10 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     let deployments: Api<Deployment> =
         Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
 
+    // TODO: We should refactor this such that each deployment of Chisel corresponds to an exit node
+    // Currently each deployment of Chisel corresponds to a service, which means duplicate deployments of Chisel
+    // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
+    // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
     let deployment_data = create_owned_deployment(&obj, &node)?;
     let serverside = PatchParams::apply("chisel-operator").validation_strict();
     let _deployment = deployments

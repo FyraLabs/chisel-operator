@@ -219,7 +219,7 @@ pub fn create_owned_deployment(
     exit_node: &ExitNode,
 ) -> Result<Deployment, ReconcileError> {
     // We can unwrap safely since this object is from the API server
-    let oref = source.controller_owner_ref(&()).unwrap();
+    let oref = exit_node.controller_owner_ref(&()).unwrap();
     // We can unwrap safely since Service is guaranteed to have a name
     let service_name = source.metadata.name.as_ref().unwrap();
 
