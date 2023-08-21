@@ -24,7 +24,7 @@ I do not want to pay a 25$ monthly fee on top of the reverse proxy VPS that I am
 
 This project will never have a profit incentive, and will always be open-source. I simply want to make a solution that is FOSS, and share it with the world because I believe that it will be useful to many people.
 
-I myself work at a financially struggling startup, and also live in a country where the average salary is 500$ a month. I understand the struggle of having to pay for expensive software, and I want to make a solution that is free for everyone to use. Having to rent out a VPS for 5-10$ a month is already expensive enough, and I don't want to have to pay an additional 25$ a month just to use a reverse proxy so I can expose my pirated content to the Internet.
+I myself work at a financially struggling startup, and also live in a country where the average salary is 500$ a month. I understand the struggle of having to pay for expensive software, and I want to make a solution that is free for everyone to use. Having to rent out a VPS for 5-10$ a month is already expensive enough, and I don't want to have to pay an additional 25$ a month just to use a reverse proxy so I can expose my content to the Internet.
 
 ## How does it work?
 
