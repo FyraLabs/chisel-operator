@@ -10,5 +10,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release && cp /app/target/release/chisel-operator /app/chisel-operator
 
 FROM redhat/ubi9:latest
-COPY --from=build-env /app/chisel-operator /usr/bin/chisel-operator
+RUN useradd -u 1001 chisel
+USER 1001
+COPY --from=build-env --chown=chisel /app/chisel-operator /usr/bin/chisel-operator
 CMD ["chisel-operator"]
