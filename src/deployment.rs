@@ -12,7 +12,7 @@ use k8s_openapi::{
     },
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
-use kube::{api::ResourceExt, core::ObjectMeta, Resource};
+use kube::{api::ResourceExt, core::ObjectMeta, Resource, error::ErrorResponse};
 use tracing::{debug, info};
 
 /// The function takes a ServicePort struct and returns a string representation of the port number and
@@ -219,7 +219,16 @@ pub fn create_owned_deployment(
     exit_node: &ExitNode,
 ) -> Result<Deployment, ReconcileError> {
     // We can unwrap safely since this object is from the API server
-    let oref = exit_node.controller_owner_ref(&()).unwrap();
+    let oref = exit_node.controller_owner_ref(&()).ok_or_else(
+        || {
+            ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
+                code: 500,
+                message: "ExitNode is missing owner reference".to_string(),
+                reason: "MissingOwnerReference".to_string(),
+                status: "Failure".to_string(),
+            }))
+        },
+    )?;
     // We can unwrap safely since Service is guaranteed to have a name
     let service_name = source.metadata.name.as_ref().unwrap();
 
@@ -239,4 +248,48 @@ pub fn create_owned_deployment(
         }),
         ..Default::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ops::ExitNodeSpec;
+
+    use super::*;
+    use k8s_openapi::api::core::v1::Service;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
+
+    #[test]
+    fn test_create_owned_deployment() {
+        let service = Service {
+            metadata: ObjectMeta {
+                name: Some("test-service".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let exit_node = ExitNode {
+            spec: ExitNodeSpec {
+                host: "127.0.0.1".to_string(),
+                port: 8080,
+                auth: None,
+                fingerprint: None,
+            },
+            metadata: ObjectMeta {
+                owner_references: Some(vec![OwnerReference {
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+        };
+        let deployment = create_owned_deployment(&service, &exit_node).unwrap();
+        assert_eq!(
+            deployment.metadata.name.unwrap(),
+            "chisel-test-service".to_string()
+        );
+        let owner_ref = deployment.metadata.owner_references.unwrap().pop().unwrap();
+        assert_eq!(owner_ref.kind, "ExitNode");
+        assert_eq!(owner_ref.api_version, "v1");
+        assert_eq!(owner_ref.name, "");
+        assert_eq!(owner_ref.uid, uuid::Uuid::nil().to_string());
+    }
 }
