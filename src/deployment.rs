@@ -287,8 +287,14 @@ mod tests {
             },
             metadata: ObjectMeta {
                 owner_references: Some(vec![OwnerReference {
-                    ..Default::default()
+                    kind: "ExitNode".to_string(),
+                    api_version: "v1".to_string(),
+                    name: "test-node".to_string(),
+                    uid: uuid::Uuid::nil().to_string(),
+                    controller: Some(true),
+                    block_owner_deletion: Some(true),
                 }]),
+                namespace: Some("default".to_string()),
                 ..Default::default()
             },
         };
