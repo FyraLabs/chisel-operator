@@ -159,8 +159,14 @@ pub fn create_pod_template(
     source: &Service,
     exit_node: &ExitNode,
 ) -> Result<PodTemplateSpec, ReconcileError> {
-    // We can unwrap safely since Service is guaranteed to have a name
-    let service_name = source.metadata.name.as_ref().unwrap();
+    let service_name = source.metadata.name.as_ref().ok_or_else(|| {
+        ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
+            code: 500,
+            message: "Service is missing name".to_string(),
+            reason: "MissingServiceName".to_string(),
+            status: "Failure".to_string(),
+        }))
+    })?;
 
     let mut args = vec!["client".to_string()];
     args.extend(generate_chisel_flags(exit_node));
@@ -218,7 +224,6 @@ pub fn create_owned_deployment(
     source: &Service,
     exit_node: &ExitNode,
 ) -> Result<Deployment, ReconcileError> {
-    // We can unwrap safely since this object is from the API server
     let oref = exit_node.controller_owner_ref(&()).ok_or_else(
         || {
             ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
@@ -229,8 +234,14 @@ pub fn create_owned_deployment(
             }))
         },
     )?;
-    // We can unwrap safely since Service is guaranteed to have a name
-    let service_name = source.metadata.name.as_ref().unwrap();
+    let service_name = source.metadata.name.as_ref().ok_or_else(|| {
+        ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
+            code: 500,
+            message: "Service is missing name".to_string(),
+            reason: "MissingServiceName".to_string(),
+            status: "Failure".to_string(),
+        }))
+    })?;
 
     Ok(Deployment {
         metadata: ObjectMeta {
