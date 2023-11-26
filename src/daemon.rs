@@ -36,6 +36,7 @@ struct Context {
 
 // Let's not use magic values, so we can change this later or if someone wants to fork this for something else
 const OPERATOR_CLASS: &str = "chisel-operator.io/chisel-operator-class";
+const OPERATOR_MANAGER: &str = "chisel-operator";
 
 // #[instrument(skip(ctx), fields(trace_id))]
 /// Reconcile cluster state
@@ -45,6 +46,8 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // Span::current().record("trace_id", &field::display(&trace_id));
 
     // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to $OPERATOR_CLASS
+
+    // todo: is there anything different need to be done for OpenShift? We use vanilla k8s and k3s/rke2 so we don't know
     if obj
         .spec
         .as_ref()
@@ -87,7 +90,7 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
     // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
     let deployment_data = create_owned_deployment(&obj, &node)?;
-    let serverside = PatchParams::apply("chisel-operator").validation_strict();
+    let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
     let _deployment = deployments
         .patch(
             &deployment_data.name_any(),

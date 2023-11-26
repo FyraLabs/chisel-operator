@@ -37,6 +37,7 @@ fn convert_service_port(svcport: ServicePort) -> String {
 
     if let Some(protocol) = svcport.protocol {
         match protocol.as_str() {
+            // todo: we probably want to imply none by default
             "TCP" => port.push_str("/tcp"),
             "UDP" => port.push_str("/udp"),
             _ => (),
@@ -60,6 +61,7 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
 pub fn generate_remote_arg(node: &ExitNode) -> String {
+    // todo: what about ECDSA keys?
     format!("{}:{}", node.spec.host, node.spec.port)
 }
 
@@ -80,6 +82,9 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
     let service_name = svc.metadata.name.clone().unwrap();
     // We can unwrap safely since Service is namespaced scoped
     let service_namespace = svc.namespace().unwrap();
+
+
+    // this feels kind of janky, will need to refactor this later
 
     // check if there's a custom IP set
     // let target_ip = svc
@@ -269,6 +274,8 @@ mod tests {
     use k8s_openapi::api::core::v1::Service;
     use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
 
+    // TODO: ExitNode is missing owner reference, test fails
+    // TODO: implement more tests
     #[test]
     fn test_create_owned_deployment() {
         let service = Service {
