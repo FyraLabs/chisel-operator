@@ -34,6 +34,9 @@ struct Context {
     client: Client,
 }
 
+// Let's not use magic values, so we can change this later or if someone wants to fork this for something else
+const OPERATOR_CLASS: &str = "chisel-operator.io/chisel-operator-class";
+
 // #[instrument(skip(ctx), fields(trace_id))]
 /// Reconcile cluster state
 #[instrument(skip(ctx))]
@@ -41,7 +44,7 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // let trace_id = get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));
 
-    // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to "chisel-operator.io/chisel-operator-class"
+    // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to $OPERATOR_CLASS
     if obj
         .spec
         .as_ref()
@@ -53,7 +56,7 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
             .filter(|spec| {
                 spec.load_balancer_class.is_none()
                     || spec.load_balancer_class
-                        == Some("chisel-operator.io/chisel-operator-class".to_string())
+                        == Some(OPERATOR_CLASS.to_string())
             })
             .is_none()
     {
