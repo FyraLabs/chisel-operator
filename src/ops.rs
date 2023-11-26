@@ -36,6 +36,9 @@ pub struct ExitNodeSpec {
 
 impl ExitNodeSpec {
     /// Returns the external host if it exists, otherwise returns the host
+    // jokes on you, This is actually used in the reconcile loop.
+    // rustc is weird.
+    #[allow(dead_code)]
     pub fn get_external_host(&self) -> String {
         match &self.external_host {
             Some(host) => host.clone(),
