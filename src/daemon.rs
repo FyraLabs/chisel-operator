@@ -93,7 +93,12 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
         )
         .await?;
 
-    let ip_address = node.spec.host.clone();
+    tracing::trace!("deployment: {:?}", _deployment);
+
+    // new update: We now have the ability to use an external hostname for the exit node!
+    // this means that you can now route traffic to the exit node using any network interface, or a domain if you wanted to
+    // this is useful if you don't wanna open up the chisel API to the public internet
+    let ip_address = node.spec.get_external_host();
     // Update the status for the LoadBalancer service
     // The ExitNode IP will always be set, so it is safe to unwrap the host
     let status_data = serde_json::json!({"status": {

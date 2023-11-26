@@ -281,9 +281,11 @@ mod tests {
         let exit_node = ExitNode {
             spec: ExitNodeSpec {
                 host: "127.0.0.1".to_string(),
+                external_host: None,
                 port: 8080,
                 auth: None,
                 fingerprint: None,
+                default_route: true,
             },
             metadata: ObjectMeta {
                 owner_references: Some(vec![OwnerReference {
