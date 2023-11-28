@@ -7,6 +7,7 @@ use color_eyre::Result;
 // use tracing::info;
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 // Main entrypoint for operator
+mod cloud;
 mod daemon;
 mod deployment;
 mod error;

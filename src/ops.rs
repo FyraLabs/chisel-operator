@@ -1,3 +1,5 @@
+use crate::cloud::digitalocean::DigitalOceanProvisioner;
+use crate::cloud::CloudProvider;
 use kube::CustomResource;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -33,7 +35,6 @@ pub struct ExitNodeSpec {
     pub default_route: bool,
 }
 
-
 impl ExitNodeSpec {
     /// Returns the external host if it exists, otherwise returns the host
     // jokes on you, This is actually used in the reconcile loop.
@@ -45,4 +46,30 @@ impl ExitNodeSpec {
             None => self.host.clone(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct LinodeProvisioner {
+    pub auth: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct AWSProvisioner {
+    pub auth: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
+#[kube(
+    group = "chisel-operator.io",
+    version = "v1",
+    kind = "ExitNodeProvisioner",
+    singular = "exitnodeprovisioner",
+    struct = "ExitNodeProvisioner",
+    namespaced
+)]
+/// ExitNodeProvisioner is a custom resource that represents a Chisel exit node provisioner on a cloud provider.
+pub enum ExitNodeProvisionerSpec {
+    DigitalOcean(DigitalOceanProvisioner),
+    Linode(LinodeProvisioner),
+    AWS(AWSProvisioner),
 }

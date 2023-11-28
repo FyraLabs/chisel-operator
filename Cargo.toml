@@ -41,6 +41,10 @@ thiserror = "1.0"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-logfmt = "0.3.2"
 uuid = "1.6"
+digitalocean-rs = { version = "0.1.9", default-features = false, features = ["default-rustls"] }
+rand = { version = "0.8.5", features = ["log", "serde"] }
+async-trait = "0.1.74"
+names = "0.14.0"
 # opentelemetry = { version = "0.18.0", features = ["trace", "rt-tokio"] }
 # opentelemetry-otlp = { version = "0.11.0", features = ["tokio"] }
 # tonic = { version = "0.8.3" }

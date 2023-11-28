@@ -12,7 +12,7 @@ use k8s_openapi::{
     },
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
-use kube::{api::ResourceExt, core::ObjectMeta, Resource, error::ErrorResponse};
+use kube::{api::ResourceExt, core::ObjectMeta, error::ErrorResponse, Resource};
 use tracing::{debug, info};
 
 /// The function takes a ServicePort struct and returns a string representation of the port number and
@@ -82,7 +82,6 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
     let service_name = svc.metadata.name.clone().unwrap();
     // We can unwrap safely since Service is namespaced scoped
     let service_namespace = svc.namespace().unwrap();
-
 
     // this feels kind of janky, will need to refactor this later
 
@@ -229,16 +228,14 @@ pub fn create_owned_deployment(
     source: &Service,
     exit_node: &ExitNode,
 ) -> Result<Deployment, ReconcileError> {
-    let oref = exit_node.controller_owner_ref(&()).ok_or_else(
-        || {
-            ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
-                code: 500,
-                message: "ExitNode is missing owner reference".to_string(),
-                reason: "MissingOwnerReference".to_string(),
-                status: "Failure".to_string(),
-            }))
-        },
-    )?;
+    let oref = exit_node.controller_owner_ref(&()).ok_or_else(|| {
+        ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
+            code: 500,
+            message: "ExitNode is missing owner reference".to_string(),
+            reason: "MissingOwnerReference".to_string(),
+            status: "Failure".to_string(),
+        }))
+    })?;
     let service_name = source.metadata.name.as_ref().ok_or_else(|| {
         ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
             code: 500,

@@ -58,8 +58,7 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
             .as_ref()
             .filter(|spec| {
                 spec.load_balancer_class.is_none()
-                    || spec.load_balancer_class
-                        == Some(OPERATOR_CLASS.to_string())
+                    || spec.load_balancer_class == Some(OPERATOR_CLASS.to_string())
             })
             .is_none()
     {
