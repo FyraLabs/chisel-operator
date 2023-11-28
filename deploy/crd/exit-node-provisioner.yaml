@@ -1,0 +1,64 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: exitnodeprovisioners.chisel-operator.io
+spec:
+  group: chisel-operator.io
+  names:
+    categories: []
+    kind: ExitNodeProvisioner
+    plural: exitnodeprovisioners
+    shortNames: []
+    singular: exitnodeprovisioner
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns: []
+      name: v1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for ExitNodeProvisionerSpec via `CustomResource`
+          properties:
+            spec:
+              description: ExitNodeProvisioner is a custom resource that represents a Chisel exit node provisioner on a cloud provider.
+              oneOf:
+                - required:
+                    - DigitalOcean
+                - required:
+                    - Linode
+                - required:
+                    - AWS
+              properties:
+                AWS:
+                  properties:
+                    auth:
+                      type: string
+                  required:
+                    - auth
+                  type: object
+                DigitalOcean:
+                  properties:
+                    auth:
+                      description: Reference to a secret containing the DigitalOcean API token, under the token key
+                      type: string
+                    region:
+                      description: Region ID of the DigitalOcean datacenter to provision the exit node in
+                      type: string
+                  required:
+                    - auth
+                    - region
+                  type: object
+                Linode:
+                  properties:
+                    auth:
+                      type: string
+                  required:
+                    - auth
+                  type: object
+              type: object
+          required:
+            - spec
+          title: ExitNodeProvisioner
+          type: object
+      served: true
+      storage: true
+      subresources: {}
