@@ -10,4 +10,7 @@ pub enum ReconcileError {
 
     #[error("There are no ports set on this LoadBalancer")]
     NoPortsSet,
+
+    #[error("The provided cloud provisioner was not found in the cluster")]
+    CloudProvisionerNotFound,
 }

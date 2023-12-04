@@ -15,6 +15,7 @@ pub fn generate_name() -> String {
 mod cloud_init;
 pub mod digitalocean;
 mod pwgen;
+mod reconciler;
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub enum CloudProvider {

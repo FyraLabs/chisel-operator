@@ -14,7 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, error, info, instrument};
 
-use crate::ops::ExitNode;
+use crate::{
+    cloud::CloudProvider,
+    ops::{ExitNode, ExitNodeProvisioner},
+};
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
@@ -30,18 +33,116 @@ use crate::{deployment::create_owned_deployment, error::ReconcileError};
 //         .trace_id()
 // }
 
-struct Context {
-    client: Client,
+pub struct Context {
+    pub client: Client,
+}
+
+const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
+const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
+
+#[instrument(skip(ctx))]
+async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<ExitNode> {
+    let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
+    let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
+    node_list.items.into_iter().find(|node| {
+        node.metadata
+            .labels
+            .as_ref()
+            .map(|labels| labels.get(EXIT_NODE_NAME_LABEL) == Some(&query.to_string()))
+            .unwrap_or(false)
+    })
+}
+#[instrument(skip(ctx))]
+async fn find_exit_node_provisioner_from_label(
+    ctx: Arc<Context>,
+    query: &str,
+) -> Option<ExitNodeProvisioner> {
+    let nodes: Api<ExitNodeProvisioner> = Api::all(ctx.client.clone());
+    let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
+    node_list.items.into_iter().find(|node| {
+        node.metadata
+            .labels
+            .as_ref()
+            .map(|labels| labels.get(EXIT_NODE_PROVISIONER_LABEL) == Some(&query.to_string()))
+            .unwrap_or(false)
+    })
+}
+/// Check whether the exit node was managed by a provisioner
+async fn check_exit_node_managed(node: &ExitNode) -> bool {
+    // returns false if there's no annotation, true if annotation exists, simple logic
+    node.metadata
+        .annotations
+        .as_ref()
+        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
+        .unwrap_or(false)
+}
+
+async fn check_service_managed(service: &Service) -> bool {
+    // returns false if there's no annotation, true if annotation exists, simple logic
+    service
+        .metadata
+        .annotations
+        .as_ref()
+        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
+        .unwrap_or(false)
 }
 
 // Let's not use magic values, so we can change this later or if someone wants to fork this for something else
 const OPERATOR_CLASS: &str = "chisel-operator.io/chisel-operator-class";
 const OPERATOR_MANAGER: &str = "chisel-operator";
+#[instrument(skip(ctx))]
+async fn select_exit_node_local(
+    ctx: Arc<Context>,
+    service: &Service,
+) -> Result<ExitNode, ReconcileError> {
+    // if service has label with exit node name, use that and error if not found
+    if let Some(exit_node_name) = service
+        .metadata
+        .labels
+        .as_ref()
+        .and_then(|labels| labels.get(EXIT_NODE_NAME_LABEL))
+    {
+        find_exit_node_from_label(ctx.clone(), exit_node_name)
+            .await
+            .ok_or(ReconcileError::NoAvailableExitNodes)
+    } else {
+        // otherwise, use the first available exit node
+        let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
+        let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+        node_list
+            .items
+            .first()
+            .ok_or(ReconcileError::NoAvailableExitNodes)
+            .map(|node| node.clone())
+    }
+}
+#[instrument(skip(ctx))]
+async fn select_exit_node_cloud(
+    ctx: Arc<Context>,
+    service: &Service,
+    provisioner: &str,
+) -> Result<ExitNode, ReconcileError> {
+    // logic is: it should check if the annotation is set, if it is not, create a new exit node and provision it
+    // if it is set, then check if exit node exists, if it does, return that exit node, if it doesn't, create a new exit node and return that
+
+    // check if annotation is set
+    
+    let exit_node_name = service
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL));
+
+    if let Some(exit_node_name) = exit_node_name {
+        todo!()
+    }
+    todo!()
+}
 
 // #[instrument(skip(ctx), fields(trace_id))]
 /// Reconcile cluster state
 #[instrument(skip(ctx))]
-async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
+async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     // let trace_id = get_trace_id();
     // Span::current().record("trace_id", &field::display(&trace_id));
 
@@ -70,14 +171,66 @@ async fn reconcile(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, Recon
     // We can unwrap safely since Service is namespaced scoped
     let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
-    // We will only be supporting 1 exit node for all services for now, so we can just grab the first one
-    let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
-    let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
-    let node = node_list
-        .items
-        .first()
-        .ok_or(ReconcileError::NoAvailableExitNodes)?;
+    // let node = select_exit_node_local(ctx.clone(), &obj).await?;
 
+    // todo: I wrote this while I'm a bit tired, clean this up later
+    // also needs testing, please test this
+
+    let node = {
+        if check_service_managed(&obj).await {
+            let provisioner = obj
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+                .unwrap();
+
+            // Remove attached exit node if the service was managed by a cloud provider and when it is removed
+            if obj.metadata.deletion_timestamp.is_some() {
+                // get annotations of $EXIT_NODE_NAME_LABEL
+                let exit_node_name = obj
+                    .metadata
+                    .annotations
+                    .as_ref()
+                    .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
+                    .unwrap();
+
+                // get exit node from name
+                let exit_node = find_exit_node_from_label(ctx.clone(), exit_node_name)
+                    .await
+                    .ok_or(ReconcileError::NoAvailableExitNodes)?;
+
+                // remove exit node
+                let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
+                info!("deleting exit node: {}", exit_node.name_any());
+                nodes
+                    .delete(&exit_node.name_any(), &Default::default())
+                    .await?;
+                return Ok(Action::requeue(Duration::from_secs(3600)));
+            } else {
+                let exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
+
+                // add annotation to service
+                let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+                let _svcs = services
+                    .patch(
+                        obj.name_any().as_str(),
+                        &serverside.clone(),
+                        &Patch::Apply(serde_json::json!({
+                            "metadata": {
+                                "annotations": {
+                                    EXIT_NODE_NAME_LABEL: exit_node.name_any()
+                                }
+                            }
+                        })),
+                    )
+                    .await?;
+                exit_node
+            }
+        } else {
+            select_exit_node_local(ctx.clone(), &obj).await?
+        }
+    };
     tracing::debug!("node: {:?}", node);
 
     // We can unwrap safely since ExitNode is namespaced scoped
@@ -135,14 +288,59 @@ fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>)
     Action::requeue(Duration::from_secs(5))
 }
 
+fn error_policy_exit_node(
+    _object: Arc<ExitNode>,
+    err: &ReconcileError,
+    _ctx: Arc<Context>,
+) -> Action {
+    error!(err = ?err);
+    Action::requeue(Duration::from_secs(5))
+}
+
+async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
+    info!("exit node reconcile request: {}", obj.name_any());
+
+    let is_managed = check_exit_node_managed(&obj).await;
+
+    debug!(?is_managed, "exit node is managed by cloud provisioner?");
+
+    if !is_managed {
+        return Ok(Action::await_change());
+    }
+
+    let provisioner = obj
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+        .unwrap();
+
+    let provisioner = find_exit_node_provisioner_from_label(ctx.clone(), provisioner)
+        .await
+        .ok_or(ReconcileError::CloudProvisionerNotFound)?;
+
+    Ok(Action::requeue(Duration::from_secs(3600)))
+}
+
 /// watches for Kubernetes service resources and runs a controller to reconcile them.
 pub async fn run() -> color_eyre::Result<()> {
     let client = Client::try_default().await?;
     // watch for K8s service resources (default)
     let services: Api<Service> = Api::all(client.clone());
 
+    let exit_nodes: Api<ExitNode> = Api::all(client.clone());
+
     Controller::new(services, Config::default())
-        .run(reconcile, error_policy, Arc::new(Context { client }))
+        .run(reconcile_svcs, error_policy, Arc::new(Context { client: client.clone() }))
+        .for_each(|_| futures::future::ready(()))
+        .await;
+
+    Controller::new(exit_nodes, Config::default())
+        .run(
+            reconcile_nodes,
+            error_policy_exit_node,
+            Arc::new(Context { client }),
+        )
         .for_each(|_| futures::future::ready(()))
         .await;
 
