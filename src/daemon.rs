@@ -133,7 +133,8 @@ async fn select_exit_node_cloud(
         .as_ref()
         .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL));
 
-    if let Some(exit_node_name) = exit_node_name {
+    if exit_node_name.is_none() {
+        // create new exit node here
         todo!()
     }
     todo!()
