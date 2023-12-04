@@ -1,10 +1,13 @@
 use async_trait::async_trait;
 use digitalocean_rs::DigitalOceanApi;
 use digitalocean_rs::DigitalOceanError;
+use kube::core::ObjectMeta;
 use names::Generator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::env;
+
+use crate::ops::ExitNode;
 
 /// Simple wrapper for names crate
 pub fn generate_name() -> String {
@@ -28,6 +31,27 @@ pub struct CloudExitNode {
     pub name: String,
     pub password: String,
     pub ip: String,
+}
+
+const CHISEL_PORT: u16 = 9090;
+
+impl Into<ExitNode> for CloudExitNode {
+    fn into(self) -> ExitNode {
+        ExitNode {
+            spec: crate::ops::ExitNodeSpec {
+                host: self.ip.clone(),
+                external_host: Some(self.ip.clone()),
+                port: CHISEL_PORT,
+                fingerprint: None,
+                auth: Some(self.password),
+                default_route: false,
+            },
+            metadata: ObjectMeta {
+                name: Some(self.name),
+                ..ObjectMeta::default()
+            },
+        }
+    }
 }
 
 #[async_trait]
