@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use digitalocean_rs::DigitalOceanApi;
 use digitalocean_rs::DigitalOceanError;
+use k8s_openapi::api::core::v1::Secret;
 use kube::core::ObjectMeta;
 use names::Generator;
 use schemars::JsonSchema;
@@ -8,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 use crate::ops::ExitNode;
+use crate::ops::ExitNodeProvisioner;
+use crate::ops::ExitNodeProvisionerSpec;
+use crate::ops::ExitNodeStatus;
 
 /// Simple wrapper for names crate
 pub fn generate_name() -> String {
@@ -26,6 +30,22 @@ pub enum CloudProvider {
     Linode,
     AWS,
 }
+
+impl CloudProvider {
+    pub fn from_crd(crd: ExitNodeProvisioner) -> color_eyre::Result<Self> {
+        // this thing is an enum so we can just match on it?
+
+        // todo: single source of truth for this maybe
+        // consider removing this CloudProvider enum and just using the ExitNodeProvisionerSpec enum
+        // and then we can just match on that
+
+        match crd.spec {
+            ExitNodeProvisionerSpec::DigitalOcean(_) => Ok(CloudProvider::DigitalOcean),
+            ExitNodeProvisionerSpec::Linode(_) => Ok(CloudProvider::Linode),
+            ExitNodeProvisionerSpec::AWS(_) => Ok(CloudProvider::AWS),
+        }
+    }
+}
 pub struct CloudExitNode {
     pub provider: CloudProvider,
     pub name: String,
@@ -35,31 +55,11 @@ pub struct CloudExitNode {
 
 const CHISEL_PORT: u16 = 9090;
 
-impl Into<ExitNode> for CloudExitNode {
-    fn into(self) -> ExitNode {
-        ExitNode {
-            spec: crate::ops::ExitNodeSpec {
-                host: self.ip.clone(),
-                external_host: Some(self.ip.clone()),
-                port: CHISEL_PORT,
-                fingerprint: None,
-                auth: Some(self.password),
-                default_route: false,
-            },
-            metadata: ObjectMeta {
-                name: Some(self.name),
-                ..ObjectMeta::default()
-            },
-        }
-    }
-}
-
 #[async_trait]
 pub trait Provisioner {
-    async fn create_exit_node(&self) -> color_eyre::Result<CloudExitNode>;
-    async fn update_exit_node(&self, exit_node: CloudExitNode)
-        -> color_eyre::Result<CloudExitNode>;
-    async fn delete_exit_node(&self, exit_node: CloudExitNode) -> color_eyre::Result<()>;
+    async fn create_exit_node(&self, auth: Secret) -> color_eyre::Result<ExitNode>;
+    async fn update_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<ExitNode>;
+    async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()>;
 }
 
 // Each LB service binds to an exit node, which will be a many-to-one relationship

@@ -1,8 +1,10 @@
 use crate::cloud::digitalocean::DigitalOceanProvisioner;
 use crate::cloud::CloudProvider;
-use kube::CustomResource;
+use k8s_openapi::api::core::v1::Secret;
+use kube::{CustomResource, Api};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use color_eyre::Result;
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
@@ -11,6 +13,7 @@ use serde::{Deserialize, Serialize};
     kind = "ExitNode",
     singular = "exitnode",
     struct = "ExitNode",
+    status = "ExitNodeStatus",
     namespaced
 )]
 /// ExitNode is a custom resource that represents a Chisel exit node.
@@ -49,6 +52,17 @@ impl ExitNodeSpec {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+
+pub struct ExitNodeStatus {
+    pub provider: String,
+    pub name: String,
+    // pub password: String,
+    pub ip: String,
+    pub id: Option<String>,
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
     pub auth: String,
 }
@@ -72,4 +86,44 @@ pub enum ExitNodeProvisionerSpec {
     DigitalOcean(DigitalOceanProvisioner),
     Linode(LinodeProvisioner),
     AWS(AWSProvisioner),
+}
+
+
+pub trait ProvisionerSecret {
+    fn find_secret(&self) -> Result<Option<String>>;
+}
+
+impl ExitNodeProvisionerSpec {
+    pub fn as_string(&self) -> String {
+        match self {
+            ExitNodeProvisionerSpec::DigitalOcean(_) => "digitalocean".to_string(),
+            ExitNodeProvisionerSpec::Linode(_) => "linode".to_string(),
+            ExitNodeProvisionerSpec::AWS(_) => "aws".to_string(),
+        }
+    }
+
+
+}
+
+impl ExitNodeProvisioner {
+    pub async fn find_secret(&self) -> Result<Option<Secret>> {
+        let secret_name = match &self.spec {
+            ExitNodeProvisionerSpec::DigitalOcean(a) => a.auth.clone(),
+            ExitNodeProvisionerSpec::Linode(a) => a.auth.clone(),
+            ExitNodeProvisionerSpec::AWS(a) => a.auth.clone(),
+        };
+
+        // Find a k8s secret with the name of the secret reference
+
+        let client = kube::Client::try_default().await?;
+
+        let secret = Api::<Secret>::namespaced(
+            client.clone(),
+            &self.metadata.namespace.as_ref().unwrap().clone(),
+        );
+
+        let secret = secret.get(&secret_name).await?;
+
+        Ok(Some(secret))
+    }
 }

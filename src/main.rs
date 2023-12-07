@@ -1,3 +1,5 @@
+use std::env;
+
 use color_eyre::Result;
 // use opentelemetry::sdk::export::metrics::StdoutExporterBuilder;
 // use opentelemetry_api::trace::{
@@ -51,8 +53,23 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     dotenvy::dotenv().ok();
 
-    let logger = tracing_logfmt::layer();
-    let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?;
+    let logger_env = env::var("LOGGER").unwrap_or_else(|_| "logfmt".to_string());
+
+    let logfmt_logger = tracing_logfmt::layer().boxed();
+
+    let pretty_logger = tracing_subscriber::fmt::layer().pretty().boxed();
+
+    let logger = match logger_env.as_str() {
+        "logfmt" => logfmt_logger,
+        "pretty" => pretty_logger,
+        _ => logfmt_logger,
+    };
+
+
+    let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?
+    .add_directive("tower=off".parse().unwrap())
+    .add_directive("hyper=error".parse().unwrap())
+    .add_directive("tokio_util=error".parse().unwrap());
 
     // let telemetry = tracing_opentelemetry::layer().with_tracer(init_tracer().await);
     let collector = Registry::default()

@@ -1,8 +1,29 @@
 // Daemon module
 // watch for changes in all LoadBalancer services and update the IP addresses
 
+/*
+   notes:
+   so the way this works is that the user deploys a ExitNodeProvisioner resource
+   and then set an annotation on the service to use that provisioner
+   the chisel operator will then watch for that annotation and then create a new exit node
+   for that service
+   the exit node will then be annotated with the name of the service
+   if the service is deleted, the exit node will also be deleted, and the actual cloud resource will also be deleted
+
+   honestly this whole logic is kinda confusing but I don't know how to make it less clunky
+
+
+   There can also be a case where the user creates an exit node manually,
+   with the provisioner annotation set, in that case chisel operator will
+   create a cloud resource for that exit node and manages it.
+
+   todo: properly handle all this logic
+
+   todo: use `tracing` and put every operation in a span to make debugging easier
+*/
+
 use color_eyre::Result;
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
@@ -57,15 +78,21 @@ async fn find_exit_node_provisioner_from_label(
     ctx: Arc<Context>,
     query: &str,
 ) -> Option<ExitNodeProvisioner> {
+    let span = tracing::debug_span!("find_exit_node_provisioner_from_label", ?query);
+    let _enter = span.enter();
     let nodes: Api<ExitNodeProvisioner> = Api::all(ctx.client.clone());
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
-    node_list.items.into_iter().find(|node| {
+    info!(node_list = ?node_list, "node list");
+    let result = node_list.items.into_iter().find(|node| {
         node.metadata
-            .labels
+            .name
             .as_ref()
-            .map(|labels| labels.get(EXIT_NODE_PROVISIONER_LABEL) == Some(&query.to_string()))
+            .map(|name| name == query)
             .unwrap_or(false)
-    })
+    });
+    debug!(query = ?query, ?result, "Query result");
+
+    result
 }
 /// Check whether the exit node was managed by a provisioner
 async fn check_exit_node_managed(node: &ExitNode) -> bool {
@@ -126,7 +153,7 @@ async fn select_exit_node_cloud(
     // if it is set, then check if exit node exists, if it does, return that exit node, if it doesn't, create a new exit node and return that
 
     // check if annotation is set
-    
+
     let exit_node_name = service
         .metadata
         .annotations
@@ -320,6 +347,11 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .await
         .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
+    // todo: Finally call the cloud provider to provision the resource
+    let cloud_provider = CloudProvider::from_crd(provisioner);
+
+    
+
     Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
@@ -331,19 +363,33 @@ pub async fn run() -> color_eyre::Result<()> {
 
     let exit_nodes: Api<ExitNode> = Api::all(client.clone());
 
-    Controller::new(services, Config::default())
-        .run(reconcile_svcs, error_policy, Arc::new(Context { client: client.clone() }))
-        .for_each(|_| futures::future::ready(()))
-        .await;
+    let mut reconcilers = vec![];
 
-    Controller::new(exit_nodes, Config::default())
-        .run(
-            reconcile_nodes,
-            error_policy_exit_node,
-            Arc::new(Context { client }),
-        )
-        .for_each(|_| futures::future::ready(()))
-        .await;
+    reconcilers.push(
+        Controller::new(services, Config::default())
+            .run(
+                reconcile_svcs,
+                error_policy,
+                Arc::new(Context {
+                    client: client.clone(),
+                }),
+            )
+            .for_each(|_| futures::future::ready(()))
+            .boxed(),
+    );
+
+    reconcilers.push(
+        Controller::new(exit_nodes, Config::default())
+            .run(
+                reconcile_nodes,
+                error_policy_exit_node,
+                Arc::new(Context { client }),
+            )
+            .for_each(|_| futures::future::ready(()))
+            .boxed(),
+    );
+
+    futures::future::join_all(reconcilers).await;
 
     Ok(())
 }

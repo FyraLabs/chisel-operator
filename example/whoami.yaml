@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: whoami
   namespace: default
+  annotations:
+    chisel-operator.io/exit-node-name: "my-exit-node"
 spec:
   replicas: 1
   selector:

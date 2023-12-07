@@ -303,6 +303,7 @@ mod tests {
                 namespace: Some("default".to_string()),
                 ..Default::default()
             },
+            status: None,
         };
         let deployment = create_owned_deployment(&service, &exit_node).unwrap();
         assert_eq!(
