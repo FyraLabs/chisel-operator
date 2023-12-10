@@ -1,6 +1,9 @@
 use kube::CustomResourceExt;
 
 mod cloud;
+mod daemon;
+mod deployment;
+mod error;
 mod ops;
 
 fn main() {

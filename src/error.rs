@@ -13,4 +13,7 @@ pub enum ReconcileError {
 
     #[error("The provided cloud provisioner was not found in the cluster")]
     CloudProvisionerNotFound,
+    #[error("The secret keys for the cloud provisioner were not found in the cluster")]
+    CloudProvisionerSecretNotFound,
+
 }

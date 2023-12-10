@@ -2,7 +2,7 @@ use super::{
     cloud_init::generate_cloud_init_config, pwgen::generate_password, CloudExitNode, Provisioner,
 };
 use crate::cloud::CHISEL_PORT;
-use crate::ops::{ExitNode, ExitNodeStatus};
+use crate::ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
 use async_trait::async_trait;
 use color_eyre::eyre::{anyhow, Error};
 use digitalocean_rs::{DigitalOceanApi, DigitalOceanError};
@@ -45,14 +45,31 @@ impl DigitalOceanProvisioner {
 
 #[async_trait]
 impl Provisioner for DigitalOceanProvisioner {
-    async fn create_exit_node(&self, auth: Secret) -> color_eyre::Result<ExitNode> {
+    async fn create_exit_node(
+        &self,
+        auth: Secret,
+        exit_node: ExitNode,
+    ) -> color_eyre::Result<ExitNodeStatus> {
         let password = generate_password(32);
         let config = generate_cloud_init_config(&password);
 
         // TODO: Secret reference, not plaintext
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth).await?);
 
-        let name = crate::cloud::generate_name();
+        // get exit node provisioner from label
+
+        let provisioner = exit_node
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+            .unwrap();
+
+        let name = format!(
+            "{}-{}",
+            provisioner,
+            exit_node.metadata.name.as_ref().unwrap()
+        );
 
         // todo: remove lea's backdoor key
         let droplet = api
@@ -66,26 +83,11 @@ impl Provisioner for DigitalOceanProvisioner {
 
         let droplet_ip = droplet.networks.v4[0].ip_address.clone();
 
-        let exit_node = ExitNode {
-            spec: crate::ops::ExitNodeSpec {
-                host: droplet_ip.clone(),
-                port: CHISEL_PORT,
-                default_route: false,
-                auth: None,
-                external_host: None,
-                fingerprint: None,
-            },
-            metadata: ObjectMeta {
-                name: Some(droplet.name.clone()),
-                ..Default::default()
-            },
-
-            status: Some(ExitNodeStatus {
-                provider: "digitalocean".to_string(),
-                name: droplet.name,
-                ip: droplet_ip,
-                id: Some(droplet.id.to_string()),
-            }),
+        let exit_node = ExitNodeStatus {
+            name: name.clone(),
+            ip: droplet_ip.clone(),
+            id: Some(droplet.id.to_string()),
+            provider: provisioner.clone(),
         };
 
         Ok(exit_node)
@@ -95,27 +97,28 @@ impl Provisioner for DigitalOceanProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-    ) -> color_eyre::Result<ExitNode> {
+    ) -> color_eyre::Result<ExitNodeStatus> {
         // check if droplet exists, then update it
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth.clone()).await?);
         let node = exit_node.clone();
 
-        if let Some(status) = exit_node.status {
-            if let Some(id) = status.id {
+        if let Some(ref status) = &exit_node.status {
+            if let Some(id) = &status.id {
                 // try to find droplet by id
                 let droplet = api.get_droplet_async(&id).await;
 
                 match droplet {
                     Ok(_droplet) => {
                         // do nothing for now
-                        Ok(node)
+                        info!("Droplet {} exists, doing nothing", id);
+                        Ok(status.clone())
                     }
                     Err(DigitalOceanError::Api(e)) => {
                         if e.message
                             .contains("The resource you were accessing could not be found.")
                         {
                             warn!("No droplet found for exit node, creating new droplet");
-                            return self.create_exit_node(auth).await;
+                            return self.create_exit_node(auth, exit_node).await;
                         } else {
                             return Err(color_eyre::eyre::eyre!(
                                 "DigitalOcean API error: {}",
@@ -127,11 +130,11 @@ impl Provisioner for DigitalOceanProvisioner {
                 }
             } else {
                 warn!("No ID found for exit node, creating new droplet");
-                return self.create_exit_node(auth).await;
+                return self.create_exit_node(auth, exit_node).await;
             }
         } else {
             warn!("No status found for exit node, creating new droplet");
-            return self.create_exit_node(auth).await;
+            return self.create_exit_node(auth, exit_node).await;
         }
     }
 
@@ -139,8 +142,8 @@ impl Provisioner for DigitalOceanProvisioner {
         // do nothing if no status, or no id, or droplet doesn't exist
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth).await?);
 
-        if let Some(status) = exit_node.status {
-            if let Some(id) = status.id {
+        if let Some(ref status) = exit_node.status {
+            if let Some(id) = &status.id {
                 // try to find droplet by id
                 let droplet = api.get_droplet_async(&id).await;
 

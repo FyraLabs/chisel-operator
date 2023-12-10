@@ -5,6 +5,9 @@ use kube::{CustomResource, Api};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use color_eyre::Result;
+pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
+pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
+
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
@@ -52,7 +55,6 @@ impl ExitNodeSpec {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-
 pub struct ExitNodeStatus {
     pub provider: String,
     pub name: String,

@@ -8,6 +8,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::env;
 
+use crate::daemon;
 use crate::ops::ExitNode;
 use crate::ops::ExitNodeProvisioner;
 use crate::ops::ExitNodeProvisionerSpec;
@@ -57,8 +58,16 @@ const CHISEL_PORT: u16 = 9090;
 
 #[async_trait]
 pub trait Provisioner {
-    async fn create_exit_node(&self, auth: Secret) -> color_eyre::Result<ExitNode>;
-    async fn update_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<ExitNode>;
+    async fn create_exit_node(
+        &self,
+        auth: Secret,
+        exit_node: ExitNode,
+    ) -> color_eyre::Result<ExitNodeStatus>;
+    async fn update_exit_node(
+        &self,
+        auth: Secret,
+        exit_node: ExitNode,
+    ) -> color_eyre::Result<ExitNodeStatus>;
     async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()>;
 }
 

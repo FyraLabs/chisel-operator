@@ -36,8 +36,11 @@ use std::time::Duration;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
-    cloud::CloudProvider,
-    ops::{ExitNode, ExitNodeProvisioner},
+    cloud::{CloudProvider, Provisioner},
+    ops::{
+        ExitNode, ExitNodeProvisioner, ExitNodeStatus, EXIT_NODE_NAME_LABEL,
+        EXIT_NODE_PROVISIONER_LABEL,
+    },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 
@@ -57,9 +60,6 @@ use crate::{deployment::create_owned_deployment, error::ReconcileError};
 pub struct Context {
     pub client: Client,
 }
-
-const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
-const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
 
 #[instrument(skip(ctx))]
 async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<ExitNode> {
@@ -348,9 +348,75 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
     // todo: Finally call the cloud provider to provision the resource
-    let cloud_provider = CloudProvider::from_crd(provisioner);
+    // todo: handle edge case where the user inputs a wrong provider
+    let cloud_provider = CloudProvider::from_crd(provisioner.clone()).unwrap();
 
-    
+    // todo: generic function to provision/delete cloud resources here
+
+    // ?, if the struct impls CloudProvider (or wtf we named it) just call the create function on it
+
+    // sorry im a little eepy, anyway
+
+    // get exit node if not exists? or? idfk
+
+    // wait i should generate a name for it so it can look it up first right
+
+    // yes
+
+    // fuck we need to get information from service or exit node itself? oh yea, status
+
+    // try to get exit node name, or generate one, by first trying to find a real status
+
+    let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
+    // cappy, please clean this up once I'm done.
+    if obj.status.is_none() {
+        // it's an enum lol
+        // wait i thought this would just work since it's... oh
+        let secret = provisioner.find_secret().await.or_else(|_| {
+            Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound)
+        })?.unwrap();
+        
+        let fuck: Box<dyn Provisioner + Send> = match provisioner.spec {
+            // crate::ops::ExitNodeProvisionerSpec::AWS(inner) => Box::new(inner),
+            crate::ops::ExitNodeProvisionerSpec::DigitalOcean(inner) => Box::new(inner),
+            // crate::ops::ExitNodeProvisionerSpec::Linode(inner) => inner,
+            _ => todo!(),
+        };
+
+
+        let nya = fuck
+            .create_exit_node(
+                secret,
+                (*obj).clone(),
+            ).await;
+
+            let nya = nya
+            .unwrap();
+
+        // let status_data = serde_json::json!({"status": {
+        //     "loadBalancer": {
+        //         "ingress": [
+        //             {
+        //                 "ip": ip_address
+        //             }
+        //         ]
+        //     }
+        // }});
+
+        debug!("Patching status for {}", obj.name_any());
+        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+        let _svcs = exit_nodes
+            .patch_status(
+                // We can unwrap safely since Service is guaranteed to have a name
+                obj.name_any().as_str(),
+                &serverside.clone(),
+                &Patch::Merge(nya),
+            )
+            .await?;
+
+        // actually make a cloud resource using CloudProvider
+    }
 
     Ok(Action::requeue(Duration::from_secs(3600)))
 }
