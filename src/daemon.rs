@@ -24,12 +24,16 @@
 
 use color_eyre::Result;
 use futures::{FutureExt, StreamExt};
-use k8s_openapi::api::{apps::v1::Deployment, core::v1::Service};
+use k8s_openapi::api::{
+    apps::v1::Deployment,
+    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
+};
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
     runtime::{controller::Action, watcher::Config, Controller},
     Client,
 };
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 use std::time::Duration;
@@ -199,6 +203,8 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // We can unwrap safely since Service is namespaced scoped
     let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
+    let obj = obj.as_ref().clone();
+
     // let node = select_exit_node_local(ctx.clone(), &obj).await?;
 
     // todo: I wrote this while I'm a bit tired, clean this up later
@@ -259,56 +265,107 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             select_exit_node_local(ctx.clone(), &obj).await?
         }
     };
-    tracing::debug!("node: {:?}", node);
+    // tracing::debug!("node: {:?}", node);
 
-    // We can unwrap safely since ExitNode is namespaced scoped
-    let deployments: Api<Deployment> =
-        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+    // let's try to avoid an infinite loop here
 
-    // TODO: We should refactor this such that each deployment of Chisel corresponds to an exit node
-    // Currently each deployment of Chisel corresponds to a service, which means duplicate deployments of Chisel
-    // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
-    // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
-    let deployment_data = create_owned_deployment(&obj, &node)?;
-    let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-    let _deployment = deployments
-        .patch(
-            &deployment_data.name_any(),
-            &serverside,
-            &Patch::Apply(deployment_data),
-        )
-        .await?;
+    // check if the IP address of the exit node is the same as the one in the status
 
-    tracing::trace!("deployment: {:?}", _deployment);
+    // if it is, then we don't need to do anything
 
-    // new update: We now have the ability to use an external hostname for the exit node!
-    // this means that you can now route traffic to the exit node using any network interface, or a domain if you wanted to
-    // this is useful if you don't wanna open up the chisel API to the public internet
-    let ip_address = node.spec.get_external_host();
-    // Update the status for the LoadBalancer service
-    // The ExitNode IP will always be set, so it is safe to unwrap the host
-    let status_data = serde_json::json!({"status": {
-        "loadBalancer": {
-            "ingress": [
-                {
-                    "ip": ip_address
-                }
-            ]
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+
+    let exit_node_ip = node.get_host().await;
+
+    // check if status is the same as the one we're about to patch
+
+    let obj_ip = obj.status
+    .as_ref()
+    .and_then(|status| status.load_balancer.as_ref())
+    .and_then(|lb| lb.ingress.as_ref())
+    .and_then(|ingress| ingress.first())
+    .and_then(|ingress| ingress.ip.as_ref())
+    .map(|ip| ip.as_str());
+
+
+    debug!(?exit_node_ip, ?obj_ip, "Exit node IP debug");
+
+    if obj_ip == Some(exit_node_ip.as_str())
+    {
+        info!("status is the same, not patching");
+
+        return Ok(Action::requeue(Duration::from_secs(3600)));
+    } else {
+        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+
+        let mut svc = obj.clone();
+
+        // debug!(?exit_node_ip, "Exit node IP");
+
+        if svc
+            .status
+            .as_ref()
+            .and_then(|status| status.load_balancer.as_ref())
+            .and_then(|lb| lb.ingress.as_ref())
+            .and_then(|ingress| ingress.first())
+            .and_then(|ingress| ingress.ip.as_ref())
+            == Some(&exit_node_ip)
+        {
+            info!("Load balancer IP is already None, not patching");
+            return Ok(Action::requeue(Duration::from_secs(3600)));
         }
-    }});
-    debug!("Patching status for {}", obj.name_any());
-    let _svcs = services
-        .patch_status(
-            // We can unwrap safely since Service is guaranteed to have a name
-            obj.name_any().as_str(),
-            &serverside.clone(),
-            &Patch::Merge(status_data.clone()),
-        )
-        .await?;
 
-    info!(status = ?status_data, "Patched status for {}", obj.name_any());
+        svc.status = Some(ServiceStatus {
+            load_balancer: Some(LoadBalancerStatus {
+                ingress: Some(vec![LoadBalancerIngress {
+                    ip: Some(exit_node_ip),
+                    // hostname: Some(node.get_external_host()),
+                    ..Default::default()
+                }]),
+            }),
+            ..Default::default()
+        });
 
-    Ok(Action::requeue(Duration::from_secs(3600)))
+        // Update the status for the LoadBalancer service
+        // The ExitNode IP will always be set, so it is safe to unwrap the host
+
+        debug!("Service status: {:#?}", svc.status);
+
+        // debug!("Patching status for {}", obj.name_any());
+
+        let _svcs = services
+            .patch_status(
+                // We can unwrap safely since Service is guaranteed to have a name
+                obj.name_any().as_str(),
+                &serverside.clone(),
+                &Patch::Merge(&svc),
+            )
+            .await?;
+
+        info!(status = ?obj, "Patched status for {}", obj.name_any());
+
+        // We can unwrap safely since ExitNode is namespaced scoped
+        let deployments: Api<Deployment> =
+            Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+
+        // TODO: We should refactor this such that each deployment of Chisel corresponds to an exit node
+        // Currently each deployment of Chisel corresponds to a service, which means duplicate deployments of Chisel
+        // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
+        // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
+        let deployment_data = create_owned_deployment(&obj, &node).await?;
+        let _deployment = deployments
+            .patch(
+                &deployment_data.name_any(),
+                &serverside,
+                &Patch::Apply(deployment_data),
+            )
+            .await?;
+
+        tracing::trace!("deployment: {:?}", _deployment);
+
+        Ok(Action::requeue(Duration::from_secs(3600)))
+    }
 }
 
 fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>) -> Action {
@@ -349,71 +406,60 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     // todo: Finally call the cloud provider to provision the resource
     // todo: handle edge case where the user inputs a wrong provider
-    let cloud_provider = CloudProvider::from_crd(provisioner.clone()).unwrap();
-
-    // todo: generic function to provision/delete cloud resources here
-
-    // ?, if the struct impls CloudProvider (or wtf we named it) just call the create function on it
-
-    // sorry im a little eepy, anyway
-
-    // get exit node if not exists? or? idfk
-
-    // wait i should generate a name for it so it can look it up first right
-
-    // yes
-
-    // fuck we need to get information from service or exit node itself? oh yea, status
-
-    // try to get exit node name, or generate one, by first trying to find a real status
+    // todo: handle deletion of exit node
 
     let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
+    let mut exitnode_patchtmpl = exit_nodes.get(&obj.name_any()).await?;
+
+    // handle deletion
+
+    let provisioner_api: Box<dyn Provisioner + Send> = match provisioner.clone().spec {
+        // crate::ops::ExitNodeProvisionerSpec::AWS(inner) => Box::new(inner),
+        crate::ops::ExitNodeProvisionerSpec::DigitalOcean(inner) => Box::new(inner),
+        // crate::ops::ExitNodeProvisionerSpec::Linode(inner) => inner,
+        _ => todo!(),
+    };
 
     // cappy, please clean this up once I'm done.
     if obj.status.is_none() {
         // it's an enum lol
         // wait i thought this would just work since it's... oh
-        let secret = provisioner.find_secret().await.or_else(|_| {
-            Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound)
-        })?.unwrap();
-        
-        let fuck: Box<dyn Provisioner + Send> = match provisioner.spec {
-            // crate::ops::ExitNodeProvisionerSpec::AWS(inner) => Box::new(inner),
-            crate::ops::ExitNodeProvisionerSpec::DigitalOcean(inner) => Box::new(inner),
-            // crate::ops::ExitNodeProvisionerSpec::Linode(inner) => inner,
-            _ => todo!(),
-        };
-
-
-        let nya = fuck
-            .create_exit_node(
-                secret,
-                (*obj).clone(),
-            ).await;
-
-            let nya = nya
+        let secret = provisioner
+            .find_secret()
+            .await
+            .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
             .unwrap();
 
-        // let status_data = serde_json::json!({"status": {
-        //     "loadBalancer": {
-        //         "ingress": [
-        //             {
-        //                 "ip": ip_address
-        //             }
-        //         ]
-        //     }
-        // }});
+        let nya = provisioner_api
+            .create_exit_node(secret, (*obj).clone())
+            .await;
 
-        debug!("Patching status for {}", obj.name_any());
+        let nya = nya.unwrap();
+
+        // let mut exitnode = exit_nodes.get(&obj.name_any()).await?;
+        // maybe we patch the data like this?
+        exitnode_patchtmpl.status = Some(nya);
+        // exitnode_patchtmpl.spec.auth = Some(exitnode_patchtmpl.get_secret_name());
+        // exitnode_patchtmpl.spec.external_host =
+        // Some(exitnode_patchtmpl.status.as_ref().unwrap().ip.clone());
+        // exitnode_patchtmpl.spec.host = exitnode_patchtmpl.status.as_ref().unwrap().ip.clone();
+
         let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+        // how does it not find the exit node resource
+
         let _svcs = exit_nodes
             .patch_status(
                 // We can unwrap safely since Service is guaranteed to have a name
-                obj.name_any().as_str(),
+                &obj.name_any(),
                 &serverside.clone(),
-                &Patch::Merge(nya),
+                &Patch::Merge(exitnode_patchtmpl),
             )
-            .await?;
+            .await
+            .unwrap();
+
+        // debug unwrap here, because we dont wanna burn cash
+        // todo: proper handle
 
         // actually make a cloud resource using CloudProvider
     }

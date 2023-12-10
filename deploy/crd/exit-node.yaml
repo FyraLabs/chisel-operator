@@ -49,10 +49,28 @@ spec:
             - host
             - port
             type: object
+          status:
+            nullable: true
+            properties:
+              id:
+                nullable: true
+                type: string
+              ip:
+                type: string
+              name:
+                type: string
+              provider:
+                type: string
+            required:
+            - ip
+            - name
+            - provider
+            type: object
         required:
         - spec
         title: ExitNode
         type: object
     served: true
     storage: true
-    subresources: {}
+    subresources:
+      status: {}

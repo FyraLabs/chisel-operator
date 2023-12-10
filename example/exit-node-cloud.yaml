@@ -7,7 +7,7 @@ metadata:
     chisel-operator.io/exit-node-provider: "digitalocean"
 spec:
   # IP address of exit node
-  host: "192.168.1.1"
+  host: ""
   # Control plane socket port
   port: 9090
   # Name of the secret containing the auth key

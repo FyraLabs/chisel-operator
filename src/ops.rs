@@ -1,13 +1,15 @@
+use std::collections::BTreeMap;
+
 use crate::cloud::digitalocean::DigitalOceanProvisioner;
 use crate::cloud::CloudProvider;
+use color_eyre::Result;
 use k8s_openapi::api::core::v1::Secret;
-use kube::{CustomResource, Api};
+use kube::{Api, CustomResource, core::ObjectMeta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use color_eyre::Result;
+use tracing::debug;
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
 pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
-
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
@@ -41,19 +43,94 @@ pub struct ExitNodeSpec {
     pub default_route: bool,
 }
 
-impl ExitNodeSpec {
-    /// Returns the external host if it exists, otherwise returns the host
-    // jokes on you, This is actually used in the reconcile loop.
-    // rustc is weird.
-    #[allow(dead_code)]
-    pub fn get_external_host(&self) -> String {
-        match &self.external_host {
-            Some(host) => host.clone(),
-            None => self.host.clone(),
+
+
+impl ExitNode {
+    /// for cloud provisioning: returns the name of the secret containing the cloud provider auth token
+    ///
+    /// if not exists, generates a new name using the ExitNode name
+    pub fn get_secret_name(&self) -> String {
+        match &self.spec.auth {
+            Some(auth) => auth.clone(),
+            None => format!("{}-auth", self.metadata.name.as_ref().unwrap()),
         }
     }
-}
+    
+    pub fn get_external_host(&self) -> String {
+        match &self.spec.external_host {
+            Some(host) => host.clone(),
+            None => {
+                // check if status.ip exists
+                // if it does, use that
+                // otherwise use self.host
+                match &self.status {
+                    Some(status) => status.ip.clone(),
+                    None => self.spec.host.clone(),
+                }
+            }
+        }
+    }
 
+    /// returns the host
+    pub async fn get_host(&self) -> String {
+        // check if status.ip exists
+        // if it does, use that
+        // otherwise use self.host
+
+        let client = kube::Client::try_default().await.unwrap();
+
+        // ok, let's ask the API for reliable data
+
+        let exit_nodes: Api<ExitNode> = Api::namespaced(client.clone(), &self.metadata.namespace.as_ref().unwrap().clone());
+
+        let exit_node = exit_nodes.get(&self.metadata.name.as_ref().unwrap()).await.unwrap();
+
+        debug!("ExitNode: {:#?}", exit_node.status);
+        match &exit_node.status {
+            Some(status) => status.ip.clone(),
+            None => exit_node.spec.host.clone(),
+        }
+    }
+
+    /// For cloud provisioning:
+    /// 
+    /// Generates a new secret with the `auth` key containing the auth string for chisel in the same namespace as the ExitNode
+    pub async fn generate_secret(&self, password: String) -> Result<Secret> {
+        let secret_name = self.get_secret_name();
+
+        let auth_tmpl = format!("{}:{}", "chisel", password);
+
+        let mut map = BTreeMap::new();
+        map.insert(String::from("auth"), auth_tmpl);
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(secret_name.clone()),
+                namespace: self.metadata.namespace.clone(),
+                ..Default::default()
+            },
+            string_data: Some(map),
+            ..Default::default()
+        };
+
+        let client = kube::Client::try_default().await?;
+
+        // add secret to k8s
+
+        let secret_api = Api::<Secret>::namespaced(client.clone(), &self.metadata.namespace.as_ref().unwrap().clone());
+
+        // force overwrite
+
+        if let Ok(_existing_secret) = secret_api.get(&secret_name).await {
+            debug!("Secret already exists, deleting");
+            secret_api.delete(&secret_name, &Default::default()).await?;
+        }
+
+        let secret = secret_api.create(&kube::api::PostParams::default(), &secret).await?;
+
+        Ok(secret)
+    }
+}
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct ExitNodeStatus {
     pub provider: String,
@@ -62,7 +139,6 @@ pub struct ExitNodeStatus {
     pub ip: String,
     pub id: Option<String>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
@@ -90,7 +166,6 @@ pub enum ExitNodeProvisionerSpec {
     AWS(AWSProvisioner),
 }
 
-
 pub trait ProvisionerSecret {
     fn find_secret(&self) -> Result<Option<String>>;
 }
@@ -103,8 +178,6 @@ impl ExitNodeProvisionerSpec {
             ExitNodeProvisionerSpec::AWS(_) => "aws".to_string(),
         }
     }
-
-
 }
 
 impl ExitNodeProvisioner {
