@@ -203,7 +203,9 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // We can unwrap safely since Service is namespaced scoped
     let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
-    let obj = obj.as_ref().clone();
+    let mut svc = services.get_status(&obj.name_any()).await?;
+
+    let obj = svc.clone();
 
     // let node = select_exit_node_local(ctx.clone(), &obj).await?;
 
@@ -269,9 +271,11 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // let's try to avoid an infinite loop here
 
+    
     // check if the IP address of the exit node is the same as the one in the status
-
+    
     // if it is, then we don't need to do anything
+    // !!!!! WHY IS IT STILL LOOPING
 
     tokio::time::sleep(Duration::from_secs(5)).await;
 
@@ -299,7 +303,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     } else {
         let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
-        let mut svc = obj.clone();
+        // let mut svc = obj.clone();
 
         // debug!(?exit_node_ip, "Exit node IP");
 
