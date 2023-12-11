@@ -505,13 +505,14 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
                 Event::Apply(_) => Ok(Action::requeue(Duration::from_secs(3600))),
                 Event::Cleanup(node) => {
-                    provisioner_api
-                        .delete_exit_node(secret, (*node).clone())
-                        .await
-                        .unwrap_or_else(|e| {
-                            error!(?e, "Error deleting exit node {}", node.name_any())
-                        });
-
+                    if is_managed {
+                        provisioner_api
+                            .delete_exit_node(secret, (*node).clone())
+                            .await
+                            .unwrap_or_else(|e| {
+                                error!(?e, "Error deleting exit node {}", node.name_any())
+                            });
+                    }
                     Ok(Action::requeue(Duration::from_secs(3600)))
                 }
             };
