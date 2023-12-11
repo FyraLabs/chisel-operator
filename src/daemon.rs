@@ -69,13 +69,28 @@ pub struct Context {
 async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<ExitNode> {
     let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
-    node_list.items.into_iter().find(|node| {
-        node.metadata
-            .labels
-            .as_ref()
-            .map(|labels| labels.get(EXIT_NODE_NAME_LABEL) == Some(&query.to_string()))
-            .unwrap_or(false)
-    })
+    node_list
+        .items
+        .into_iter()
+        .filter(|node| {
+            // Is the ExitNode not cloud provisioned OR is status set
+            !node
+                .metadata
+                .annotations
+                .as_ref()
+                .map(|annotations| {
+                    annotations.contains_key("chisel-operator.io/exit-node-provider")
+                })
+                .unwrap_or(false)
+                || node.status.is_some()
+        })
+        .find(|node| {
+            node.metadata
+                .labels
+                .as_ref()
+                .map(|labels| labels.get(EXIT_NODE_NAME_LABEL) == Some(&query.to_string()))
+                .unwrap_or(false)
+        })
 }
 #[instrument(skip(ctx))]
 async fn find_exit_node_provisioner_from_label(
@@ -142,6 +157,20 @@ async fn select_exit_node_local(
         let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
         node_list
             .items
+            .into_iter()
+            .filter(|node| {
+                // Is the ExitNode not cloud provisioned OR is status set
+                !node
+                    .metadata
+                    .annotations
+                    .as_ref()
+                    .map(|annotations| {
+                        annotations.contains_key("chisel-operator.io/exit-node-provider")
+                    })
+                    .unwrap_or(false)
+                    || node.status.is_some()
+            })
+            .collect::<Vec<ExitNode>>()
             .first()
             .ok_or(ReconcileError::NoAvailableExitNodes)
             .map(|node| node.clone())
@@ -271,21 +300,18 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // let's try to avoid an infinite loop here
 
-    
     // check if the IP address of the exit node is the same as the one in the status
-    
+
     // if it is, then we don't need to do anything
     // !!!!! WHY IS IT STILL LOOPING
 
     // tokio::time::sleep(Duration::from_secs(5)).await;
-
 
     let exit_node_ip = node.get_host().await;
 
     // check if status is the same as the one we're about to patch
 
     let obj_ip = obj.clone().status;
-
 
     debug!(?exit_node_ip, ?obj_ip, "Exit node IP debug");
 
@@ -357,7 +383,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     tracing::trace!("deployment: {:?}", _deployment);
 
     Ok(Action::requeue(Duration::from_secs(3600)))
-
 
     // if obj_ip == Some(exit_node_ip.as_str())
     // {
