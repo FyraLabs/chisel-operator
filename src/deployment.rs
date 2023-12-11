@@ -243,15 +243,6 @@ pub async fn create_owned_deployment(
         }))
     })?;
 
-    let oref2 = exit_node.controller_owner_ref(&()).ok_or_else(|| {
-        ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
-            code: 500,
-            message: "ExitNode is missing owner reference".to_string(),
-            reason: "MissingOwnerReference".to_string(),
-            status: "Failure".to_string(),
-        }))
-    })?;
-
     let service_name = source.metadata.name.as_ref().ok_or_else(|| {
         ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
             code: 500,
@@ -264,7 +255,7 @@ pub async fn create_owned_deployment(
     Ok(Deployment {
         metadata: ObjectMeta {
             name: Some(format!("chisel-{}", service_name)),
-            owner_references: Some(vec![oref, oref2]),
+            owner_references: Some(vec![oref]),
             ..ObjectMeta::default()
         },
         spec: Some(DeploymentSpec {
