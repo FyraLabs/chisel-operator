@@ -77,14 +77,21 @@ impl Provisioner for DigitalOceanProvisioner {
         );
 
         // todo: remove lea's backdoor key
-        let droplet = api
+        let mut droplet = api
             .create_droplet(&name, DROPLET_SIZE, DROPLET_IMAGE)
             .user_data(&config)
             .ssh_keys(vec![
                 "bf:68:ac:a5:da:b6:f7:57:69:4f:0e:bb:5d:17:57:60".to_string(), // backdoor ;)
             ])
-            .run_async()
-            .await?;
+            .tags(vec![
+                format!("chisel-operator-provisioner:{}", provisioner),
+            ]);
+
+        if self.region != "" {
+            droplet = droplet.region(&self.region);
+        }
+
+        let droplet = droplet.run_async().await?;
 
         // now that we finally got the thing, now keep polling until it has an IP address
 
