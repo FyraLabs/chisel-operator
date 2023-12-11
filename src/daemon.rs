@@ -502,6 +502,8 @@ pub async fn run() -> color_eyre::Result<()> {
 
     let mut reconcilers = vec![];
 
+    info!("Starting reconcilers...");
+
     reconcilers.push(
         Controller::new(services, Config::default())
             .run(
