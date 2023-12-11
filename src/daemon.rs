@@ -30,11 +30,11 @@ use k8s_openapi::api::{
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
-    runtime::{controller::Action, watcher::Config, Controller},
+    runtime::{controller::Action, watcher::{Config, self}, Controller, reflector::ObjectRef},
     Client,
 };
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::{sync::Arc, collections::BTreeMap};
 
 use std::time::Duration;
 use tracing::{debug, error, info, instrument};
@@ -517,8 +517,24 @@ pub async fn run() -> color_eyre::Result<()> {
             .boxed(),
     );
 
+
+    // I actually don't know from which way the watcher goes, so I'm just gonna put it here
     reconcilers.push(
         Controller::new(exit_nodes, Config::default())
+        .watches(
+            Api::<Service>::all(client.clone()),
+            watcher::Config::default(),
+            |node: Service| {
+                node
+                    .metadata
+                    .annotations
+                    .as_ref()
+                    .unwrap_or(&BTreeMap::new())
+                    .get(EXIT_NODE_PROVISIONER_LABEL)
+                    .map(String::as_str)
+                    .map(ObjectRef::new)
+            },
+        )
             .run(
                 reconcile_nodes,
                 error_policy_exit_node,
