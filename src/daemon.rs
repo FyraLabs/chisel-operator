@@ -505,7 +505,10 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
                 Event::Apply(_) => Ok(Action::requeue(Duration::from_secs(3600))),
                 Event::Cleanup(node) => {
+                    info!("Cleanup finalizer triggered for {}", node.name_any());
+
                     if is_managed {
+                        info!("Deleting cloud resource for {}", node.name_any());
                         provisioner_api
                             .delete_exit_node(secret, (*node).clone())
                             .await
