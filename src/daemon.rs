@@ -30,6 +30,8 @@ use k8s_openapi::api::{
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
+    core::ObjectMeta,
+    error::ErrorResponse,
     runtime::{
         controller::Action,
         finalizer::{self, Event},
@@ -37,18 +39,18 @@ use kube::{
         watcher::{self, Config},
         Controller,
     },
-    Client,
+    Client, Resource,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::Arc};
 
 use std::time::Duration;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     cloud::{CloudProvider, Provisioner},
     ops::{
-        ExitNode, ExitNodeProvisioner, ExitNodeStatus, EXIT_NODE_NAME_LABEL,
+        ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, EXIT_NODE_NAME_LABEL,
         EXIT_NODE_PROVISIONER_LABEL,
     },
 };
@@ -75,28 +77,13 @@ pub struct Context {
 async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<ExitNode> {
     let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
-    node_list
-        .items
-        .into_iter()
-        .filter(|node| {
-            // Is the ExitNode not cloud provisioned OR is status set
-            !node
-                .metadata
-                .annotations
-                .as_ref()
-                .map(|annotations| {
-                    annotations.contains_key("chisel-operator.io/exit-node-provider")
-                })
-                .unwrap_or(false)
-                || node.status.is_some()
-        })
-        .find(|node| {
-            node.metadata
-                .labels
-                .as_ref()
-                .map(|labels| labels.get(EXIT_NODE_NAME_LABEL) == Some(&query.to_string()))
-                .unwrap_or(false)
-        })
+    node_list.items.into_iter().find(|node| {
+        node.metadata
+            .name
+            .as_ref()
+            .map(|name| name == query)
+            .unwrap_or(false)
+    })
 }
 #[instrument(skip(ctx))]
 async fn find_exit_node_provisioner_from_label(
@@ -193,19 +180,103 @@ async fn select_exit_node_cloud(
 
     // check if annotation is set
 
+    // if let Some(exit_node_name) = service
+    //     .metadata
+    //     .annotations
+    //     .as_ref()
+    //     .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
+    // {
+    //     let exit_node = find_exit_node_from_label(ctx, exit_node_name).await;
+    //     return exit_node.ok_or(ReconcileError::NoAvailableExitNodes);
+    // }
+
+    // create new exit node here
+    let node = exit_node_from_service(ctx, service);
+    node.await
+}
+
+#[instrument(skip(ctx))]
+/// Generates an ExitNode resource from a Service resource, and creates it
+async fn exit_node_from_service(
+    ctx: Arc<Context>,
+    service: &Service,
+) -> Result<ExitNode, ReconcileError> {
+    let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &service.namespace().unwrap());
+
+    // check if annotation was set
+    let provisioner_name = service
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+        .ok_or_else(|| ReconcileError::CloudProvisionerNotFound)?;
+
     let exit_node_name = service
         .metadata
         .annotations
         .as_ref()
-        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL));
+        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
+        .unwrap_or({
+            let service_name = service.metadata.name.as_ref().unwrap();
+            &format!("service-{}", service_name)
+        })
+        .to_owned();
 
-    if exit_node_name.is_none() {
-        // create new exit node here
-        todo!()
+    let oref = service.controller_owner_ref(&()).ok_or_else(|| {
+        ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
+            code: 500,
+            message: "Service is missing owner reference".to_string(),
+            reason: "MissingOwnerReference".to_string(),
+            status: "Failure".to_string(),
+        }))
+    })?;
+
+    // try to find exit node from name and namespace
+
+    let exit_node_tmpl = ExitNode {
+        metadata: ObjectMeta {
+            name: Some(exit_node_name.clone()),
+            namespace: service.namespace(),
+            annotations: Some({
+                let mut map = BTreeMap::new();
+                map.insert(
+                    EXIT_NODE_PROVISIONER_LABEL.to_string(),
+                    provisioner_name.to_string(),
+                );
+                map
+            }),
+            owner_references: Some(vec![oref]),
+            ..Default::default()
+        },
+        spec: ExitNodeSpec {
+            host: "".to_string(),
+            port: 9090,
+            auth: None,
+            external_host: None,
+            default_route: true,
+            fingerprint: None,
+        },
+        status: None,
+    };
+
+    let exit_node = nodes.get(&exit_node_name).await;
+
+    if let Ok(exit_node) = exit_node {
+        return Ok(exit_node);
+    } else {
+        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+
+        let exit_node = nodes
+            .patch(
+                &exit_node_tmpl.name_any(),
+                &serverside,
+                &Patch::Apply(exit_node_tmpl.clone()),
+            )
+            .await?;
+
+        Ok(exit_node)
     }
-    todo!()
 }
-
 // #[instrument(skip(ctx), fields(trace_id))]
 /// Reconcile cluster state
 #[instrument(skip(ctx))]
@@ -245,7 +316,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // let node = select_exit_node_local(ctx.clone(), &obj).await?;
 
     // todo: I wrote this while I'm a bit tired, clean this up later
-    // also needs testing, please test this
 
     let node = {
         if check_service_managed(&obj).await {
@@ -257,61 +327,19 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
                 .unwrap();
 
             // Remove attached exit node if the service was managed by a cloud provider and when it is removed
-            if obj.metadata.deletion_timestamp.is_some() {
-                // get annotations of $EXIT_NODE_NAME_LABEL
-                let exit_node_name = obj
-                    .metadata
-                    .annotations
-                    .as_ref()
-                    .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
-                    .unwrap();
+            let mut exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
 
-                // get exit node from name
-                let exit_node = find_exit_node_from_label(ctx.clone(), exit_node_name)
-                    .await
-                    .ok_or(ReconcileError::NoAvailableExitNodes)?;
-
-                // remove exit node
-                let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
-                info!("deleting exit node: {}", exit_node.name_any());
-                nodes
-                    .delete(&exit_node.name_any(), &Default::default())
-                    .await?;
-                return Ok(Action::requeue(Duration::from_secs(3600)));
-            } else {
-                let exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
-
-                // add annotation to service
-                let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-                let _svcs = services
-                    .patch(
-                        obj.name_any().as_str(),
-                        &serverside.clone(),
-                        &Patch::Apply(serde_json::json!({
-                            "metadata": {
-                                "annotations": {
-                                    EXIT_NODE_NAME_LABEL: exit_node.name_any()
-                                }
-                            }
-                        })),
-                    )
-                    .await?;
-                exit_node
+            while exit_node.status.is_none() {
+                warn!("Waiting for exit node to be provisioned");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
             }
+
+            exit_node
         } else {
             select_exit_node_local(ctx.clone(), &obj).await?
         }
     };
-    // tracing::debug!("node: {:?}", node);
-
-    // let's try to avoid an infinite loop here
-
-    // check if the IP address of the exit node is the same as the one in the status
-
-    // if it is, then we don't need to do anything
-    // !!!!! WHY IS IT STILL LOOPING
-
-    // tokio::time::sleep(Duration::from_secs(5)).await;
 
     let exit_node_ip = node.get_host().await;
 
@@ -336,7 +364,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         .and_then(|ingress| ingress.ip.as_ref())
         == Some(&exit_node_ip)
     {
-        info!("Load balancer IP is already None, not patching");
+        info!("Load balancer IP is already set, not patching");
         return Ok(Action::requeue(Duration::from_secs(3600)));
     }
 
@@ -420,9 +448,9 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     debug!(?is_managed, "exit node is managed by cloud provisioner?");
 
-    if !is_managed {
-        return Ok(Action::await_change());
-    }
+    // if !is_managed {
+    //     return Ok(Action::await_change());
+    // }
 
     let provisioner = obj
         .metadata
@@ -461,8 +489,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     // cappy, please clean this up once I'm done.
     if obj.status.is_none() {
-        // it's an enum lol
-        // wait i thought this would just work since it's... oh
 
         let nya = provisioner_api
             .create_exit_node(secret.clone(), (*obj).clone())
@@ -544,6 +570,19 @@ pub async fn run() -> color_eyre::Result<()> {
 
     reconcilers.push(
         Controller::new(services, Config::default())
+            .watches(
+                Api::<ExitNode>::all(client.clone()),
+                watcher::Config::default(),
+                |node: ExitNode| {
+                    node.metadata
+                        .annotations
+                        .as_ref()
+                        .unwrap_or(&BTreeMap::new())
+                        .get(EXIT_NODE_PROVISIONER_LABEL)
+                        .map(String::as_str)
+                        .map(ObjectRef::new)
+                },
+            )
             .run(
                 reconcile_svcs,
                 error_policy,
