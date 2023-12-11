@@ -30,11 +30,17 @@ use k8s_openapi::api::{
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
-    runtime::{controller::Action, watcher::{Config, self}, Controller, reflector::ObjectRef},
+    runtime::{
+        controller::Action,
+        finalizer::{self, Event},
+        reflector::ObjectRef,
+        watcher::{self, Config},
+        Controller,
+    },
     Client,
 };
 use serde_json::{json, Value};
-use std::{sync::Arc, collections::BTreeMap};
+use std::{collections::BTreeMap, sync::Arc};
 
 use std::time::Duration;
 use tracing::{debug, error, info, instrument};
@@ -47,7 +53,7 @@ use crate::{
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
-
+pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
 //     // opentelemetry::Context -> opentelemetry::trace::Span
 //     use opentelemetry::trace::TraceContextExt as _;
@@ -446,18 +452,20 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         _ => todo!(),
     };
 
+    // finalizer for exit node
+    let secret = provisioner
+        .find_secret()
+        .await
+        .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
+        .unwrap();
+
     // cappy, please clean this up once I'm done.
     if obj.status.is_none() {
         // it's an enum lol
         // wait i thought this would just work since it's... oh
-        let secret = provisioner
-            .find_secret()
-            .await
-            .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
-            .unwrap();
 
         let nya = provisioner_api
-            .create_exit_node(secret, (*obj).clone())
+            .create_exit_node(secret.clone(), (*obj).clone())
             .await;
 
         let nya = nya.unwrap();
@@ -489,7 +497,33 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         // actually make a cloud resource using CloudProvider
     }
 
-    Ok(Action::requeue(Duration::from_secs(3600)))
+    finalizer::finalizer(
+        &exit_nodes,
+        EXIT_NODE_FINALIZER,
+        obj.clone(),
+        |event| async move {
+            let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
+                Event::Apply(_) => Ok(Action::requeue(Duration::from_secs(3600))),
+                Event::Cleanup(node) => {
+                    provisioner_api
+                        .delete_exit_node(secret, (*node).clone())
+                        .await
+                        .unwrap_or_else(|e| {
+                            error!(?e, "Error deleting exit node {}", node.name_any())
+                        });
+
+                    Ok(Action::requeue(Duration::from_secs(3600)))
+                }
+            };
+
+            // Ok(Action::requeue(Duration::from_secs(3600)))
+            m
+        },
+    )
+    .await
+    .map_err(|_| crate::error::ReconcileError::NoAvailableExitNodes)
+
+    // Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
 /// watches for Kubernetes service resources and runs a controller to reconcile them.
@@ -517,24 +551,22 @@ pub async fn run() -> color_eyre::Result<()> {
             .boxed(),
     );
 
-
     // I actually don't know from which way the watcher goes, so I'm just gonna put it here
     reconcilers.push(
         Controller::new(exit_nodes, Config::default())
-        .watches(
-            Api::<Service>::all(client.clone()),
-            watcher::Config::default(),
-            |node: Service| {
-                node
-                    .metadata
-                    .annotations
-                    .as_ref()
-                    .unwrap_or(&BTreeMap::new())
-                    .get(EXIT_NODE_PROVISIONER_LABEL)
-                    .map(String::as_str)
-                    .map(ObjectRef::new)
-            },
-        )
+            .watches(
+                Api::<Service>::all(client.clone()),
+                watcher::Config::default(),
+                |node: Service| {
+                    node.metadata
+                        .annotations
+                        .as_ref()
+                        .unwrap_or(&BTreeMap::new())
+                        .get(EXIT_NODE_PROVISIONER_LABEL)
+                        .map(String::as_str)
+                        .map(ObjectRef::new)
+                },
+            )
             .run(
                 reconcile_nodes,
                 error_policy_exit_node,
