@@ -69,6 +69,7 @@ async fn main() -> Result<()> {
     let env_filter = EnvFilter::try_from_default_env().or_else(|_| EnvFilter::try_new("info"))?
     .add_directive("tower=off".parse().unwrap())
     .add_directive("hyper=error".parse().unwrap())
+    .add_directive("kube_client=error".parse().unwrap())
     .add_directive("tokio_util=error".parse().unwrap());
 
     // let telemetry = tracing_opentelemetry::layer().with_tracer(init_tracer().await);

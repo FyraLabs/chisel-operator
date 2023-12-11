@@ -62,7 +62,13 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// values obtained from the `node` parameter.
 pub async fn generate_remote_arg(node: &ExitNode) -> String {
     // todo: what about ECDSA keys?
-    format!("{}:{}", node.get_host().await, node.spec.port)
+
+    let host = node.get_host().await;
+
+    debug!(host = ?host, "Host");
+    let output = format!("{}:{}", host, node.spec.port);
+    debug!(output = ?output, "Output");
+    output
 }
 
 /// This function generates arguments for a tunnel based on a given service.

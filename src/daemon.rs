@@ -277,7 +277,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // if it is, then we don't need to do anything
     // !!!!! WHY IS IT STILL LOOPING
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // tokio::time::sleep(Duration::from_secs(5)).await;
 
 
     let exit_node_ip = node.get_host().await;
