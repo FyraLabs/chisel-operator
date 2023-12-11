@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::cloud::digitalocean::DigitalOceanProvisioner;
+use crate::cloud::{digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner};
 use crate::cloud::CloudProvider;
 use color_eyre::Result;
 use k8s_openapi::api::core::v1::Secret;
@@ -131,10 +131,6 @@ pub struct ExitNodeStatus {
     pub id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct LinodeProvisioner {
-    pub auth: String,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {

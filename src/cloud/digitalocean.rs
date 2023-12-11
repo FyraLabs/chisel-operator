@@ -7,8 +7,6 @@ use async_trait::async_trait;
 use color_eyre::eyre::{anyhow, Error};
 use digitalocean_rs::{DigitalOceanApi, DigitalOceanError};
 use k8s_openapi::api::core::v1::Secret;
-use kube::core::ObjectMeta;
-use kube::Api;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};

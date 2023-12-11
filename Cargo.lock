@@ -176,6 +176,7 @@ dependencies = [
  "futures",
  "k8s-openapi",
  "kube",
+ "linode-rs",
  "names",
  "rand",
  "schemars",
@@ -941,6 +942,17 @@ dependencies = [
  "bitflags 2.4.1",
  "libc",
  "redox_syscall",
+]
+
+[[package]]
+name = "linode-rs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "186b8c4652b0ff548f9b1561dec9d3f76f7bd7b9bd2c5429252fe9a28b7d8310"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

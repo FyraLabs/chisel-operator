@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use digitalocean_rs::DigitalOceanApi;
-use digitalocean_rs::DigitalOceanError;
 use k8s_openapi::api::core::v1::Secret;
-use kube::core::ObjectMeta;
 use names::Generator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,6 +19,8 @@ pub fn generate_name() -> String {
 
 mod cloud_init;
 pub mod digitalocean;
+pub mod linode;
+pub mod aws;
 mod pwgen;
 mod reconciler;
 
