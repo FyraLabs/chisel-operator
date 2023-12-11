@@ -76,19 +76,10 @@ impl ExitNode {
         // check if status.ip exists
         // if it does, use that
         // otherwise use self.host
-
-        let client = kube::Client::try_default().await.unwrap();
-
-        // ok, let's ask the API for reliable data
-
-        let exit_nodes: Api<ExitNode> = Api::namespaced(client.clone(), &self.metadata.namespace.as_ref().unwrap().clone());
-
-        let exit_node = exit_nodes.get(&self.metadata.name.as_ref().unwrap()).await.unwrap();
-
-        debug!("ExitNode: {:#?}", exit_node.status);
-        match &exit_node.status {
+        debug!("ExitNode: {:#?}", self.status);
+        match &self.status {
             Some(status) => status.ip.clone(),
-            None => exit_node.spec.host.clone(),
+            None => self.spec.host.clone(),
         }
     }
 

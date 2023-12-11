@@ -284,92 +284,88 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // check if status is the same as the one we're about to patch
 
-    let obj_ip = obj.status
-    .as_ref()
-    .and_then(|status| status.load_balancer.as_ref())
-    .and_then(|lb| lb.ingress.as_ref())
-    .and_then(|ingress| ingress.first())
-    .and_then(|ingress| ingress.ip.as_ref())
-    .map(|ip| ip.as_str());
+    let obj_ip = obj.clone().status;
 
 
     debug!(?exit_node_ip, ?obj_ip, "Exit node IP debug");
 
-    if obj_ip == Some(exit_node_ip.as_str())
+    let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+
+    // let mut svc = obj.clone();
+
+    // debug!(?exit_node_ip, "Exit node IP");
+
+    if svc
+        .status
+        .as_ref()
+        .and_then(|status| status.load_balancer.as_ref())
+        .and_then(|lb| lb.ingress.as_ref())
+        .and_then(|ingress| ingress.first())
+        .and_then(|ingress| ingress.ip.as_ref())
+        == Some(&exit_node_ip)
     {
-        info!("status is the same, not patching");
-
+        info!("Load balancer IP is already None, not patching");
         return Ok(Action::requeue(Duration::from_secs(3600)));
-    } else {
-        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-
-        // let mut svc = obj.clone();
-
-        // debug!(?exit_node_ip, "Exit node IP");
-
-        if svc
-            .status
-            .as_ref()
-            .and_then(|status| status.load_balancer.as_ref())
-            .and_then(|lb| lb.ingress.as_ref())
-            .and_then(|ingress| ingress.first())
-            .and_then(|ingress| ingress.ip.as_ref())
-            == Some(&exit_node_ip)
-        {
-            info!("Load balancer IP is already None, not patching");
-            return Ok(Action::requeue(Duration::from_secs(3600)));
-        }
-
-        svc.status = Some(ServiceStatus {
-            load_balancer: Some(LoadBalancerStatus {
-                ingress: Some(vec![LoadBalancerIngress {
-                    ip: Some(exit_node_ip),
-                    // hostname: Some(node.get_external_host()),
-                    ..Default::default()
-                }]),
-            }),
-            ..Default::default()
-        });
-
-        // Update the status for the LoadBalancer service
-        // The ExitNode IP will always be set, so it is safe to unwrap the host
-
-        debug!("Service status: {:#?}", svc.status);
-
-        // debug!("Patching status for {}", obj.name_any());
-
-        let _svcs = services
-            .patch_status(
-                // We can unwrap safely since Service is guaranteed to have a name
-                obj.name_any().as_str(),
-                &serverside.clone(),
-                &Patch::Merge(&svc),
-            )
-            .await?;
-
-        info!(status = ?obj, "Patched status for {}", obj.name_any());
-
-        // We can unwrap safely since ExitNode is namespaced scoped
-        let deployments: Api<Deployment> =
-            Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
-
-        // TODO: We should refactor this such that each deployment of Chisel corresponds to an exit node
-        // Currently each deployment of Chisel corresponds to a service, which means duplicate deployments of Chisel
-        // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
-        // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
-        let deployment_data = create_owned_deployment(&obj, &node).await?;
-        let _deployment = deployments
-            .patch(
-                &deployment_data.name_any(),
-                &serverside,
-                &Patch::Apply(deployment_data),
-            )
-            .await?;
-
-        tracing::trace!("deployment: {:?}", _deployment);
-
-        Ok(Action::requeue(Duration::from_secs(3600)))
     }
+
+    svc.status = Some(ServiceStatus {
+        load_balancer: Some(LoadBalancerStatus {
+            ingress: Some(vec![LoadBalancerIngress {
+                ip: Some(exit_node_ip),
+                // hostname: Some(node.get_external_host()),
+                ..Default::default()
+            }]),
+        }),
+        ..Default::default()
+    });
+
+    // Update the status for the LoadBalancer service
+    // The ExitNode IP will always be set, so it is safe to unwrap the host
+
+    debug!("Service status: {:#?}", svc.status);
+
+    // debug!("Patching status for {}", obj.name_any());
+
+    let _svcs = services
+        .patch_status(
+            // We can unwrap safely since Service is guaranteed to have a name
+            obj.name_any().as_str(),
+            &serverside.clone(),
+            &Patch::Merge(&svc),
+        )
+        .await?;
+
+    info!(status = ?obj, "Patched status for {}", obj.name_any());
+
+    // We can unwrap safely since ExitNode is namespaced scoped
+    let deployments: Api<Deployment> =
+        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+
+    // TODO: We should refactor this such that each deployment of Chisel corresponds to an exit node
+    // Currently each deployment of Chisel corresponds to a service, which means duplicate deployments of Chisel
+    // This also caused some issues, where we (intuitively) made the owner ref of the deployment the service
+    // which breaks since a service can be in a seperate namespace from the deployment (k8s disallows this)
+    let deployment_data = create_owned_deployment(&obj, &node).await?;
+    let _deployment = deployments
+        .patch(
+            &deployment_data.name_any(),
+            &serverside,
+            &Patch::Apply(deployment_data),
+        )
+        .await?;
+
+    tracing::trace!("deployment: {:?}", _deployment);
+
+    Ok(Action::requeue(Duration::from_secs(3600)))
+
+
+    // if obj_ip == Some(exit_node_ip.as_str())
+    // {
+    //     info!("status is the same, not patching");
+
+    //     return Ok(Action::requeue(Duration::from_secs(3600)));
+    // } else {
+    // }
 }
 
 fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>) -> Action {
