@@ -59,7 +59,7 @@ impl ExitNode {
         // check if status.ip exists
         // if it does, use that
         // otherwise use self.host
-        debug!("ExitNode: {:#?}", self.status);
+        debug!(status = ?self.status, "ExitNode status",);
         match &self.status {
             Some(status) => status.ip.clone(),
             None => self.spec.host.clone(),

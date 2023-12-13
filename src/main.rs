@@ -77,6 +77,7 @@ async fn main() -> Result<()> {
         .add_directive("tower=off".parse().unwrap())
         .add_directive("hyper=error".parse().unwrap())
         .add_directive("kube_client=info".parse().unwrap())
+        .add_directive("h2=error".parse().unwrap())
         .add_directive("tokio_util=error".parse().unwrap());
 
     // let telemetry = tracing_opentelemetry::layer().with_tracer(init_tracer().await);

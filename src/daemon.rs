@@ -388,7 +388,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // Update the status for the LoadBalancer service
     // The ExitNode IP will always be set, so it is safe to unwrap the host
 
-    debug!("Service status: {:#?}", svc.status);
+    debug!(status = ? svc.status, "Service status");
 
     // debug!("Patching status for {}", obj.name_any());
 
