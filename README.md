@@ -137,7 +137,7 @@ Now, you can go with one of the two routes:
 
 #### Automatic provisioning per service
 
-Chis el Operator can automatically allocate cloud exit nodes for services,
+Chisel Operator can automatically allocate cloud exit nodes for services,
 if you set an annotation on a `LoadBalancer` service.
 
 ```yaml
