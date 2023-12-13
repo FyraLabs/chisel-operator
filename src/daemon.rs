@@ -46,12 +46,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use std::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::{
-    cloud::Provisioner,
-    ops::{
-        ExitNode, ExitNodeProvisioner, ExitNodeSpec, EXIT_NODE_NAME_LABEL,
-        EXIT_NODE_PROVISIONER_LABEL,
-    },
+use crate::ops::{
+    ExitNode, ExitNodeProvisioner, ExitNodeSpec, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 #[allow(dead_code)]
@@ -287,9 +283,6 @@ async fn exit_node_from_service(
 /// Reconcile cluster state
 #[instrument(skip(ctx))]
 async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
-    // let trace_id = get_trace_id();
-    // Span::current().record("trace_id", &field::display(&trace_id));
-
     // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to $OPERATOR_CLASS
 
     // todo: is there anything different need to be done for OpenShift? We use vanilla k8s and k3s/rke2 so we don't know
@@ -318,10 +311,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     let mut svc = services.get_status(&obj.name_any()).await?;
 
     let obj = svc.clone();
-
-    // let node = select_exit_node_local(ctx.clone(), &obj).await?;
-
-    // todo: I wrote this while I'm a bit tired, clean this up later
 
     let node = {
         if check_service_managed(&obj).await {
@@ -472,10 +461,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .await
         .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
-    // todo: Finally call the cloud provider to provision the resource
-    // todo: handle edge case where the user inputs a wrong provider
-    // todo: handle deletion of exit node
-
     let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
     let mut exitnode_patchtmpl = exit_nodes.get(&obj.name_any()).await?;
@@ -487,7 +472,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .find_secret()
         .await
         .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
-        .unwrap();
+        .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
 
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
