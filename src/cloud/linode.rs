@@ -13,7 +13,7 @@ use tracing::{debug, info, warn};
 
 const TOKEN_KEY: &str = "LINODE_TOKEN";
 const INSTANCE_TYPE: &str = "g6-nanode-1";
-const IMAGE_ID: &str = "linode/ubuntu23.04";
+const IMAGE_ID: &str = "linode/ubuntu22.04";
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
     pub auth: String,
@@ -52,7 +52,7 @@ impl Provisioner for LinodeProvisioner {
         // Okay, so apparently Linode uses base64 for user_data, so let's
         // base64 encode the config
 
-        let user_data = base64::engine::general_purpose::STANDARD_NO_PAD.encode(config);
+        let user_data = base64::engine::general_purpose::STANDARD.encode(config);
 
         let api = LinodeApi::new(self.get_token(&auth).await?);
 
@@ -71,10 +71,10 @@ impl Provisioner for LinodeProvisioner {
 
         let mut instance = api
             .create_instance(&self.region, INSTANCE_TYPE)
-            // .root_pass(&password)
+            .root_pass(&password)
             .label(&name)
-            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])
             .user_data(&user_data)
+            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])
             .image(IMAGE_ID)
             .booted(true)
             .run_async()
@@ -97,10 +97,10 @@ impl Provisioner for LinodeProvisioner {
             }
         }
 
-        // let instance_ip = instance_ip.unwrap();
+        let instance_ip = instance_ip.unwrap();
 
         let status = ExitNodeStatus {
-            ip: instance_ip.unwrap(),
+            ip: instance_ip,
             name: instance.label,
             provider: provisioner.to_string(),
             id: Some(instance.id.to_string()),

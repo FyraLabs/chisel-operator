@@ -95,7 +95,7 @@ There are two ways to use this operator:
 - Manually provision the exit (reverse proxy) node, and let the operator manage the Chisel client deployment
 - Let the operator provision exit nodes on a cloud provider of your choice. The operator currently supports the following cloud providers:
   - DigitalOcean
-  - Linode
+  - Linode (Currently only on regions with Metadata services)
   - AWS
 
 ## Cluster Installation
