@@ -501,7 +501,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 .create_exit_node(secret.clone(), (*obj).clone())
                 .await
         };
-        exitnode_patchtmpl.status = Some(cloud_resource.unwrap());
+        exitnode_patchtmpl.status = Some(cloud_resource?);
 
         exit_nodes
             .patch_status(

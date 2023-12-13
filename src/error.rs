@@ -16,4 +16,7 @@ pub enum ReconcileError {
     #[error("The secret keys for the cloud provisioner were not found in the cluster")]
     CloudProvisionerSecretNotFound,
 
+    #[error("The operator has encountered an error: {0}")]
+    OperatorError(#[from] color_eyre::Report),
+
 }
