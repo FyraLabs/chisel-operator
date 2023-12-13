@@ -81,9 +81,7 @@ impl Provisioner for DigitalOceanProvisioner {
             .ssh_keys(vec![
                 "bf:68:ac:a5:da:b6:f7:57:69:4f:0e:bb:5d:17:57:60".to_string(), // backdoor ;)
             ])
-            .tags(vec![
-                format!("chisel-operator-provisioner:{}", provisioner),
-            ]);
+            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)]);
 
         if self.region != "" {
             droplet = droplet.region(&self.region);
@@ -92,7 +90,6 @@ impl Provisioner for DigitalOceanProvisioner {
         let droplet = droplet.run_async().await?;
 
         // now that we finally got the thing, now keep polling until it has an IP address
-
 
         let droplet_id = droplet.id.to_string();
 
@@ -105,11 +102,8 @@ impl Provisioner for DigitalOceanProvisioner {
 
             if droplet.networks.v4.len() > 0 {
                 // find droplet with `ntype: public`
-                let droplet_public_net = droplet
-                    .networks
-                    .v4
-                    .iter()
-                    .find(|net| net.ntype == "public");
+                let droplet_public_net =
+                    droplet.networks.v4.iter().find(|net| net.ntype == "public");
 
                 // if none, continue
                 if droplet_public_net.is_none() {
@@ -123,13 +117,11 @@ impl Provisioner for DigitalOceanProvisioner {
                 droplet_ip_opt = Some(droplet_ip);
             } else {
                 warn!("Waiting for droplet to get IP address");
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;    
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
-
         }
 
         let droplet_ip = droplet_ip_opt.unwrap();
-
 
         let exit_node = ExitNodeStatus {
             name: name.clone(),
@@ -151,35 +143,22 @@ impl Provisioner for DigitalOceanProvisioner {
         let node = exit_node.clone();
 
         if let Some(ref status) = &exit_node.status {
-            if let Some(id) = &status.id {
-                // try to find droplet by id
-                let droplet = api.get_droplet_async(&id).await;
+            let droplet_id = status.id.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "No droplet ID found in status for exit node {}",
+                    node.metadata.name.as_ref().unwrap()
+                )
+            })?;
 
-                match droplet {
-                    Ok(_droplet) => {
-                        // do nothing for now
-                        info!("Droplet {} exists, doing nothing", id);
-                        Ok(status.clone())
-                    }
-                    Err(DigitalOceanError::Api(e)) => {
-                        if e.message
-                            .contains("The resource you were accessing could not be found.")
-                        {
-                            warn!("No droplet found for exit node, creating new droplet");
-                            return self.create_exit_node(auth, exit_node).await;
-                        } else {
-                            return Err(color_eyre::eyre::eyre!(
-                                "DigitalOcean API error: {}",
-                                e.message
-                            ));
-                        }
-                    }
-                    Err(e) => return Err(e.into()),
-                }
-            } else {
-                warn!("No ID found for exit node, creating new droplet");
-                return self.create_exit_node(auth, exit_node).await;
+            let droplet = api.get_droplet_async(&droplet_id).await?;
+
+            let mut status = status.clone();
+
+            if let Some(ip) = droplet.networks.v4.iter().find(|net| net.ntype == "public") {
+                status.ip = ip.ip_address.clone();
             }
+
+            Ok(status)
         } else {
             warn!("No status found for exit node, creating new droplet");
             return self.create_exit_node(auth, exit_node).await;

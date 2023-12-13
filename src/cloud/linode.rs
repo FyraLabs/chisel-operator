@@ -151,7 +151,7 @@ impl Provisioner for LinodeProvisioner {
 
             Ok(status)
         } else {
-            warn!("No instance ID found in status, creating new instance");
+            warn!("No instance status found, creating new instance");
             return Ok(self.create_exit_node(auth.clone(), exit_node).await?);
         }
     }
