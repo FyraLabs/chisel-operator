@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::cloud::{digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner};
 use color_eyre::Result;
 use k8s_openapi::api::core::v1::Secret;
-use kube::{Api, CustomResource, core::ObjectMeta};
+use kube::{core::ObjectMeta, Api, CustomResource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -43,8 +43,6 @@ pub struct ExitNodeSpec {
     pub default_route: bool,
 }
 
-
-
 impl ExitNode {
     /// for cloud provisioning: returns the name of the secret containing the cloud provider auth token
     ///
@@ -69,12 +67,12 @@ impl ExitNode {
     }
 
     /// For cloud provisioning:
-    /// 
+    ///
     /// Generates a new secret with the `auth` key containing the auth string for chisel in the same namespace as the ExitNode
     pub async fn generate_secret(&self, password: String) -> Result<Secret> {
         let secret_name = self.get_secret_name();
 
-        let auth_tmpl = format!("{}:{}", "chisel", password);
+        let auth_tmpl = format!("{}:{}", crate::cloud::pwgen::DEFAULT_USERNAME, password);
 
         let mut map = BTreeMap::new();
         map.insert(String::from("auth"), auth_tmpl);
@@ -93,7 +91,10 @@ impl ExitNode {
 
         // add secret to k8s
 
-        let secret_api = Api::<Secret>::namespaced(client.clone(), &self.metadata.namespace.as_ref().unwrap().clone());
+        let secret_api = Api::<Secret>::namespaced(
+            client.clone(),
+            &self.metadata.namespace.as_ref().unwrap().clone(),
+        );
 
         // force overwrite
 
@@ -102,7 +103,9 @@ impl ExitNode {
             secret_api.delete(&secret_name, &Default::default()).await?;
         }
 
-        let secret = secret_api.create(&kube::api::PostParams::default(), &secret).await?;
+        let secret = secret_api
+            .create(&kube::api::PostParams::default(), &secret)
+            .await?;
 
         Ok(secret)
     }
@@ -115,7 +118,6 @@ pub struct ExitNodeStatus {
     pub ip: String,
     pub id: Option<String>,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {
@@ -141,7 +143,6 @@ pub enum ExitNodeProvisionerSpec {
 pub trait ProvisionerSecret {
     fn find_secret(&self) -> Result<Option<String>>;
 }
-
 
 impl ExitNodeProvisioner {
     #[allow(dead_code)] // this is used in daemon.rs

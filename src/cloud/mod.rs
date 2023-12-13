@@ -9,7 +9,7 @@ pub mod aws;
 mod cloud_init;
 pub mod digitalocean;
 pub mod linode;
-mod pwgen;
+pub mod pwgen;
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub enum CloudProvider {

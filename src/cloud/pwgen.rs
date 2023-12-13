@@ -1,6 +1,6 @@
 use rand::Rng;
 
-const USERNAME: &str = "chisel";
+pub const DEFAULT_USERNAME: &str = "chisel";
 
 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                         abcdefghijklmnopqrstuvwxyz\
