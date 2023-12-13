@@ -116,13 +116,15 @@ impl Provisioner for LinodeProvisioner {
             .status
             .as_ref()
             .and_then(|status| status.id.as_ref())
-            .ok_or_else(|| anyhow!("No instance ID found in status"))?;
+            .and_then(|id| id.parse::<u64>().ok());
 
         // okay, so Linode IDs will be u64, so let's parse it
 
-        let instance_id = instance_id.parse::<u64>()?;
+        if let Some(instance_id) = instance_id {
+            info!("Deleting Linode instance with ID {}", instance_id);
+            api.delete_instance_async(instance_id).await?;
+        }
 
-        api.delete_instance_async(instance_id).await?;
 
         Ok(())
     }

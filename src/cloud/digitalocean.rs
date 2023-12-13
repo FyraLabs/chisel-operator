@@ -168,47 +168,15 @@ impl Provisioner for DigitalOceanProvisioner {
     async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()> {
         // do nothing if no status, or no id, or droplet doesn't exist
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth).await?);
+        let droplet_id = exit_node
+            .status
+            .as_ref()
+            .and_then(|status| status.id.as_ref());
 
-        if let Some(ref status) = exit_node.status {
-            if let Some(id) = &status.id {
-                // try to find droplet by id
-                let droplet = api.get_droplet_async(&id).await;
-
-                match droplet {
-                    Ok(_droplet) => {
-                        info!("Deleting droplet {}", id);
-                        // delete droplet
-                        let del_action = api.delete_droplet_async(&id).await;
-
-                        if let Err(e) = del_action {
-                            return Err(color_eyre::eyre::eyre!("DigitalOcean API error: {}", e));
-                        } else {
-                            info!("Deleted droplet {}", id);
-                            Ok(())
-                        }
-                    }
-                    Err(DigitalOceanError::Api(e)) => {
-                        if e.message
-                            .contains("The resource you were accessing could not be found.")
-                        {
-                            warn!("No droplet found for exit node, doing nothing");
-                            return Ok(());
-                        } else {
-                            return Err(color_eyre::eyre::eyre!(
-                                "DigitalOcean API error: {}",
-                                e.message
-                            ));
-                        }
-                    }
-                    Err(e) => return Err(e.into()),
-                }
-            } else {
-                warn!("No ID found for exit node, doing nothing");
-                return Ok(());
-            }
-        } else {
-            warn!("No status found for exit node, doing nothing");
-            return Ok(());
+        if let Some(droplet_id) = droplet_id {
+            info!("Deleting droplet with ID {}", droplet_id);
+            api.delete_droplet_async(droplet_id).await?;
         }
+        Ok(())
     }
 }
