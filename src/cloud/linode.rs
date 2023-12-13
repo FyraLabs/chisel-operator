@@ -1,12 +1,10 @@
-use super::{
-    cloud_init::generate_cloud_init_config, pwgen::generate_password, CloudExitNode, Provisioner,
-};
-use crate::ops::{ExitNode, ExitNodeProvisioner, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
+use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
+use crate::ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
 use async_trait::async_trait;
 use base64::Engine;
 use color_eyre::eyre::{anyhow, Error};
 use k8s_openapi::api::core::v1::Secret;
-use linode_rs::{LinodeApi, LinodeInstance};
+use linode_rs::LinodeApi;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
@@ -124,7 +122,6 @@ impl Provisioner for LinodeProvisioner {
             info!("Deleting Linode instance with ID {}", instance_id);
             api.delete_instance_async(instance_id).await?;
         }
-
 
         Ok(())
     }

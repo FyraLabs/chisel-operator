@@ -13,7 +13,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
 use kube::{api::ResourceExt, core::ObjectMeta, error::ErrorResponse, Resource};
-use tracing::{debug, info};
+use tracing::{debug, info, instrument};
 
 /// The function takes a ServicePort struct and returns a string representation of the port number and
 /// protocol (if specified).
@@ -60,10 +60,11 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// The function `generate_remote_arg` is returning a `String`. The `String`
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
-pub async fn generate_remote_arg(node: &ExitNode) -> String {
+#[allow(dead_code)]
+pub fn generate_remote_arg(node: &ExitNode) -> String {
     // todo: what about ECDSA keys?
 
-    let host = node.get_host().await;
+    let host = node.get_host();
 
     debug!(host = ?host, "Host");
     let output = format!("{}:{}", host, node.spec.port);
@@ -83,6 +84,7 @@ pub async fn generate_remote_arg(node: &ExitNode) -> String {
 ///
 /// a `Result` containing a `Vec` of `String`s. The `Vec` contains arguments for a tunnel, which are
 /// generated based on the input `Service`.
+#[allow(dead_code)]
 pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError> {
     // We can unwrap safely since Service is guaranteed to have a name
     let service_name = svc.metadata.name.clone().unwrap();
@@ -139,6 +141,7 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
 /// The function `generate_chisel_flags` is returning `Vec` of `String`s.
 /// The `Vec` contains chisel flags for the client, which are
 /// generated based on the input `ExitNode`'s spec.
+#[instrument]
 pub fn generate_chisel_flags(node: &ExitNode) -> Vec<String> {
     let mut flags = vec!["-v".to_string()];
 
@@ -165,6 +168,7 @@ pub fn generate_chisel_flags(node: &ExitNode) -> Vec<String> {
 /// Returns:
 ///
 /// a `PodTemplateSpec` object.
+#[instrument]
 pub async fn create_pod_template(
     source: &Service,
     exit_node: &ExitNode,
@@ -180,7 +184,7 @@ pub async fn create_pod_template(
 
     let mut args = vec!["client".to_string()];
     args.extend(generate_chisel_flags(exit_node));
-    args.push(generate_remote_arg(exit_node).await);
+    args.push(generate_remote_arg(exit_node));
     args.extend(generate_tunnel_args(source)?.iter().map(|s| s.to_string()));
 
     let env = exit_node.spec.auth.clone().map(|secret_name| {
@@ -230,6 +234,7 @@ pub async fn create_pod_template(
 /// Returns:
 ///
 /// a `Deployment` object.
+#[instrument]
 pub async fn create_owned_deployment(
     source: &Service,
     exit_node: &ExitNode,

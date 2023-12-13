@@ -41,20 +41,20 @@ use kube::{
     },
     Client, Resource,
 };
-use serde_json::{json, Value};
 use std::{collections::BTreeMap, sync::Arc};
 
 use std::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    cloud::{CloudProvider, Provisioner},
+    cloud::Provisioner,
     ops::{
-        ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, EXIT_NODE_NAME_LABEL,
+        ExitNode, ExitNodeProvisioner, ExitNodeSpec, EXIT_NODE_NAME_LABEL,
         EXIT_NODE_PROVISIONER_LABEL,
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
+#[allow(dead_code)]
 pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
 //     // opentelemetry::Context -> opentelemetry::trace::Span
@@ -69,6 +69,8 @@ pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
 //         .trace_id()
 // }
 
+// this is actually used to pass clients around
+#[allow(dead_code)]
 pub struct Context {
     pub client: Client,
 }
@@ -107,6 +109,7 @@ async fn find_exit_node_provisioner_from_label(
     result
 }
 /// Check whether the exit node was managed by a provisioner
+#[instrument]
 async fn check_exit_node_managed(node: &ExitNode) -> bool {
     // returns false if there's no annotation, true if annotation exists, simple logic
     node.metadata
@@ -115,7 +118,7 @@ async fn check_exit_node_managed(node: &ExitNode) -> bool {
         .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
         .unwrap_or(false)
 }
-
+#[instrument]
 async fn check_service_managed(service: &Service) -> bool {
     // returns false if there's no annotation, true if annotation exists, simple logic
     service
@@ -127,7 +130,10 @@ async fn check_service_managed(service: &Service) -> bool {
 }
 
 // Let's not use magic values, so we can change this later or if someone wants to fork this for something else
+
+#[allow(dead_code)]
 const OPERATOR_CLASS: &str = "chisel-operator.io/chisel-operator-class";
+#[allow(dead_code)]
 const OPERATOR_MANAGER: &str = "chisel-operator";
 #[instrument(skip(ctx))]
 async fn select_exit_node_local(
@@ -341,7 +347,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         }
     };
 
-    let exit_node_ip = node.get_host().await;
+    let exit_node_ip = node.get_host();
 
     // check if status is the same as the one we're about to patch
 
@@ -427,11 +433,13 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // }
 }
 
+#[instrument(skip(_object, err, _ctx))]
 fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>) -> Action {
     error!(err = ?err);
     Action::requeue(Duration::from_secs(5))
 }
 
+#[instrument(skip(_object, err, _ctx))]
 fn error_policy_exit_node(
     _object: Arc<ExitNode>,
     err: &ReconcileError,
@@ -441,6 +449,7 @@ fn error_policy_exit_node(
     Action::requeue(Duration::from_secs(5))
 }
 
+#[instrument(skip(ctx))]
 async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     info!("exit node reconcile request: {}", obj.name_any());
 
@@ -555,6 +564,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 }
 
 /// watches for Kubernetes service resources and runs a controller to reconcile them.
+#[instrument]
 pub async fn run() -> color_eyre::Result<()> {
     let client = Client::try_default().await?;
     // watch for K8s service resources (default)

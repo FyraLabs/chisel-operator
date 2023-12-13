@@ -1,28 +1,15 @@
+use crate::ops::ExitNode;
+use crate::ops::ExitNodeStatus;
 use async_trait::async_trait;
 use k8s_openapi::api::core::v1::Secret;
-use names::Generator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::env;
 
-use crate::daemon;
-use crate::ops::ExitNode;
-use crate::ops::ExitNodeProvisioner;
-use crate::ops::ExitNodeProvisionerSpec;
-use crate::ops::ExitNodeStatus;
-
-/// Simple wrapper for names crate
-pub fn generate_name() -> String {
-    let mut generator = Generator::default();
-    generator.next().unwrap()
-}
-
+pub mod aws;
 mod cloud_init;
 pub mod digitalocean;
 pub mod linode;
-pub mod aws;
 mod pwgen;
-mod reconciler;
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub enum CloudProvider {
@@ -31,28 +18,24 @@ pub enum CloudProvider {
     AWS,
 }
 
-impl CloudProvider {
-    pub fn from_crd(crd: ExitNodeProvisioner) -> color_eyre::Result<Self> {
-        // this thing is an enum so we can just match on it?
+// impl CloudProvider {
+//     #[allow(dead_code)]
+//     pub fn from_crd(crd: ExitNodeProvisioner) -> color_eyre::Result<Self> {
+//         // this thing is an enum so we can just match on it?
 
-        // todo: single source of truth for this maybe
-        // consider removing this CloudProvider enum and just using the ExitNodeProvisionerSpec enum
-        // and then we can just match on that
+//         // todo: single source of truth for this maybe
+//         // consider removing this CloudProvider enum and just using the ExitNodeProvisionerSpec enum
+//         // and then we can just match on that
 
-        match crd.spec {
-            ExitNodeProvisionerSpec::DigitalOcean(_) => Ok(CloudProvider::DigitalOcean),
-            ExitNodeProvisionerSpec::Linode(_) => Ok(CloudProvider::Linode),
-            ExitNodeProvisionerSpec::AWS(_) => Ok(CloudProvider::AWS),
-        }
-    }
-}
-pub struct CloudExitNode {
-    pub provider: CloudProvider,
-    pub name: String,
-    pub password: String,
-    pub ip: String,
-}
-
+//         match crd.spec {
+//             ExitNodeProvisionerSpec::DigitalOcean(_) => Ok(CloudProvider::DigitalOcean),
+//             ExitNodeProvisionerSpec::Linode(_) => Ok(CloudProvider::Linode),
+//             ExitNodeProvisionerSpec::AWS(_) => Ok(CloudProvider::AWS),
+//         }
+//     }
+// }
+// This code was actually used, weirdly enough
+#[allow(dead_code)]
 pub const CHISEL_PORT: u16 = 9090;
 
 #[async_trait]

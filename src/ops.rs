@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 use crate::cloud::{digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner};
-use crate::cloud::CloudProvider;
 use color_eyre::Result;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{Api, CustomResource, core::ObjectMeta};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+#[allow(dead_code)]
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
 pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
 
@@ -55,24 +55,9 @@ impl ExitNode {
             None => format!("{}-auth", self.metadata.name.as_ref().unwrap()),
         }
     }
-    
-    pub fn get_external_host(&self) -> String {
-        match &self.spec.external_host {
-            Some(host) => host.clone(),
-            None => {
-                // check if status.ip exists
-                // if it does, use that
-                // otherwise use self.host
-                match &self.status {
-                    Some(status) => status.ip.clone(),
-                    None => self.spec.host.clone(),
-                }
-            }
-        }
-    }
 
     /// returns the host
-    pub async fn get_host(&self) -> String {
+    pub fn get_host(&self) -> String {
         // check if status.ip exists
         // if it does, use that
         // otherwise use self.host
@@ -157,17 +142,9 @@ pub trait ProvisionerSecret {
     fn find_secret(&self) -> Result<Option<String>>;
 }
 
-impl ExitNodeProvisionerSpec {
-    pub fn as_string(&self) -> String {
-        match self {
-            ExitNodeProvisionerSpec::DigitalOcean(_) => "digitalocean".to_string(),
-            ExitNodeProvisionerSpec::Linode(_) => "linode".to_string(),
-            ExitNodeProvisionerSpec::AWS(_) => "aws".to_string(),
-        }
-    }
-}
 
 impl ExitNodeProvisioner {
+    #[allow(dead_code)] // this is used in daemon.rs
     pub async fn find_secret(&self) -> Result<Option<Secret>> {
         let secret_name = match &self.spec {
             ExitNodeProvisionerSpec::DigitalOcean(a) => a.auth.clone(),
