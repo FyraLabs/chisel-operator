@@ -31,9 +31,14 @@ spec:
               AWS:
                 properties:
                   auth:
+                    description: Reference to a secret containing the AWS access key ID and secret access key, under the access_key_id and secret_access_key keys
+                    type: string
+                  region:
+                    description: Region ID for the AWS region to provision the exit node in
                     type: string
                 required:
                 - auth
+                - region
                 type: object
               DigitalOcean:
                 properties:
@@ -56,8 +61,10 @@ spec:
               Linode:
                 properties:
                   auth:
+                    description: Name of the secret containing the Linode API token
                     type: string
                   region:
+                    description: Region ID of the Linode datacenter to provision the exit node in
                     type: string
                 required:
                 - auth

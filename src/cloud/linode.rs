@@ -14,7 +14,9 @@ const INSTANCE_TYPE: &str = "g6-nanode-1";
 const IMAGE_ID: &str = "linode/ubuntu22.04";
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
+    /// Name of the secret containing the Linode API token
     pub auth: String,
+    /// Region ID of the Linode datacenter to provision the exit node in
     pub region: String,
 }
 

@@ -9,11 +9,9 @@ use tracing::{debug, info, warn};
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {
-    /// Region ID of the DigitalOcean datacenter to provision the exit node in
-    /// If empty, DigitalOcean will randomly select a region for you, which might not be what you want
-    #[serde(default)]
+    /// Region ID for the AWS region to provision the exit node in
     pub region: String,
-    /// Reference to a secret containing the DigitalOcean API token, under the token key
+    /// Reference to a secret containing the AWS access key ID and secret access key, under the access_key_id and secret_access_key keys
     pub auth: String,
 
 }
