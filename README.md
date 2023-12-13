@@ -35,6 +35,9 @@ The world's running out of IPv4 addresses. This means that ISPs are starting to 
 
 You could just use an IPv6 address, but most ISPs don't support IPv6 yet, and K8s with IPv6 is kind of a pain to set up.
 
+> Disclaimer: We are not responsible for any problems arising from abuse of this software. Please proxy responsibly.
+> See [LICENSE.md](LICENSE.md) for more details.
+
 ### The other issue
 
 You might say, "What about Inlets?" Inlets is a great solution, but it comes with a couple caveats:
