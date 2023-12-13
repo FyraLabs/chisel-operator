@@ -480,12 +480,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     let mut exitnode_patchtmpl = exit_nodes.get(&obj.name_any()).await?;
 
-    let provisioner_api: Box<dyn Provisioner + Send> = match provisioner.clone().spec {
-        // crate::ops::ExitNodeProvisionerSpec::AWS(inner) => Box::new(inner),
-        crate::ops::ExitNodeProvisionerSpec::DigitalOcean(inner) => Box::new(inner),
-        crate::ops::ExitNodeProvisionerSpec::Linode(inner) => Box::new(inner),
-        _ => todo!(),
-    };
+    let provisioner_api = provisioner.clone().spec.get_inner();
 
     // finalizer for exit node
     let secret = provisioner

@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::cloud::{digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner};
+use crate::cloud::{
+    aws::AWSProvisioner, digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner,
+    Provisioner,
+};
 use color_eyre::Result;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{core::ObjectMeta, Api, CustomResource};
@@ -119,11 +122,6 @@ pub struct ExitNodeStatus {
     pub id: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
-pub struct AWSProvisioner {
-    pub auth: String,
-}
-
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
     group = "chisel-operator.io",
@@ -138,6 +136,18 @@ pub enum ExitNodeProvisionerSpec {
     DigitalOcean(DigitalOceanProvisioner),
     Linode(LinodeProvisioner),
     AWS(AWSProvisioner),
+}
+
+impl ExitNodeProvisionerSpec {
+    #[allow(dead_code)] // this one is actually used lol
+    pub fn get_inner(self) -> Box<(dyn Provisioner + Send + Sync)> {
+        // Can we somehow not have to match on this?
+        match self {
+            ExitNodeProvisionerSpec::DigitalOcean(a) => Box::new(a),
+            ExitNodeProvisionerSpec::Linode(a) => Box::new(a),
+            ExitNodeProvisionerSpec::AWS(a) => Box::new(a),
+        }
+    }
 }
 
 pub trait ProvisionerSecret {
