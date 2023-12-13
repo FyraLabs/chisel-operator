@@ -68,7 +68,12 @@ impl Provisioner for DigitalOceanProvisioner {
             .annotations
             .as_ref()
             .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
-            .unwrap();
+            .ok_or_else(|| {
+                anyhow!(
+                    "No provisioner found in annotations for exit node {}",
+                    exit_node.metadata.name.as_ref().unwrap()
+                )
+            })?;
 
         let name = format!(
             "{}-{}",
@@ -76,52 +81,39 @@ impl Provisioner for DigitalOceanProvisioner {
             exit_node.metadata.name.as_ref().unwrap()
         );
 
-        // todo: remove lea's backdoor key
-        let mut droplet = api
-            .create_droplet(&name, DROPLET_SIZE, DROPLET_IMAGE)
-            .user_data(&config)
-            .ssh_keys(self.ssh_fingerprints.clone())
-            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)]);
+        let droplet = {
+            let mut droplet = api
+                .create_droplet(&name, DROPLET_SIZE, DROPLET_IMAGE)
+                .user_data(&config)
+                .ssh_keys(self.ssh_fingerprints.clone())
+                .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)]);
 
-        if self.region != "" {
-            droplet = droplet.region(&self.region);
-        }
+            if !self.region.is_empty() {
+                droplet = droplet.region(&self.region);
+            }
 
-        let droplet = droplet.run_async().await?;
+            droplet.run_async().await?
+        };
 
         // now that we finally got the thing, now keep polling until it has an IP address
 
         let droplet_id = droplet.id.to_string();
 
-        let mut droplet_ip_opt: Option<String> = None;
-
-        while droplet_ip_opt.is_none() {
+        let droplet_ip = loop {
             let droplet = api.get_droplet_async(&droplet_id).await?;
 
             debug!(?droplet, "Getting droplet data");
 
-            if droplet.networks.v4.len() > 0 {
-                // find droplet with `ntype: public`
-                let droplet_public_net =
-                    droplet.networks.v4.iter().find(|net| net.ntype == "public");
-
-                // if none, continue
-                if droplet_public_net.is_none() {
-                    warn!("No public network found for droplet");
-                    continue;
-                }
-
-                // if some, get ip address
-
-                let droplet_ip = droplet_public_net.unwrap().ip_address.clone();
-                droplet_ip_opt = Some(droplet_ip);
+            if let Some(droplet_public_net) =
+                droplet.networks.v4.iter().find(|net| net.ntype == "public")
+            {
+                let droplet_ip = droplet_public_net.ip_address.clone();
+                break droplet_ip;
             } else {
                 warn!("Waiting for droplet to get IP address");
                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
-        }
-
-        let droplet_ip = droplet_ip_opt.unwrap();
+        };
 
         let exit_node = ExitNodeStatus {
             name: name.clone(),

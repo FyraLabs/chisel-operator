@@ -80,22 +80,18 @@ impl Provisioner for LinodeProvisioner {
 
         info!("Created instance: {:?}", instance);
 
-        let mut instance_ip: Option<String> = None;
-
-        while instance_ip.is_none() {
+        let instance_ip = loop {
             instance = api.get_instance_async(instance.id).await?;
 
             debug!("Instance status: {:?}", instance.status);
 
             if instance.ipv4.len() > 0 {
-                instance_ip = Some(instance.ipv4[0].clone());
+                break instance.ipv4[0].clone();
             } else {
                 warn!("Waiting for instance to get IP address");
                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
-        }
-
-        let instance_ip = instance_ip.unwrap();
+        };
 
         let status = ExitNodeStatus {
             ip: instance_ip,
@@ -137,8 +133,13 @@ impl Provisioner for LinodeProvisioner {
             let instance_id = status
                 .id
                 .as_ref()
-                .ok_or_else(|| anyhow!("No instance ID found in status"))?
-                .parse::<u64>()?;
+                .and_then(|id| id.parse::<u64>().ok())
+                .ok_or_else(|| {
+                    anyhow!(
+                        "No instance ID found in status for exit node {}",
+                        exit_node.metadata.name.as_ref().unwrap()
+                    )
+                })?;
 
             let instance = api.get_instance_async(instance_id).await;
 
