@@ -51,8 +51,11 @@ spec:
                 properties:
                   auth:
                     type: string
+                  region:
+                    type: string
                 required:
                 - auth
+                - region
                 type: object
             type: object
         required:
@@ -62,3 +65,4 @@ spec:
     served: true
     storage: true
     subresources: {}
+

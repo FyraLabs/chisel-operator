@@ -471,12 +471,10 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     let mut exitnode_patchtmpl = exit_nodes.get(&obj.name_any()).await?;
 
-    // handle deletion
-
     let provisioner_api: Box<dyn Provisioner + Send> = match provisioner.clone().spec {
         // crate::ops::ExitNodeProvisionerSpec::AWS(inner) => Box::new(inner),
         crate::ops::ExitNodeProvisionerSpec::DigitalOcean(inner) => Box::new(inner),
-        // crate::ops::ExitNodeProvisionerSpec::Linode(inner) => inner,
+        crate::ops::ExitNodeProvisionerSpec::Linode(inner) => Box::new(inner),
         _ => todo!(),
     };
 
@@ -487,42 +485,35 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
         .unwrap();
 
-    // cappy, please clean this up once I'm done.
-    if obj.status.is_none() {
+    let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
-        let nya = provisioner_api
-            .create_exit_node(secret.clone(), (*obj).clone())
-            .await;
+    //? maybe we move this to finalizer's apply function?
 
-        let nya = nya.unwrap();
+    let _node = {
+        let cloud_resource = if let Some(_status) = obj.status.as_ref() {
+            info!("Updating cloud resource for {}", obj.name_any());
+            provisioner_api
+                .update_exit_node(secret.clone(), (*obj).clone())
+                .await
+        } else {
+            info!("Creating cloud resource for {}", obj.name_any());
+            provisioner_api
+                .create_exit_node(secret.clone(), (*obj).clone())
+                .await
+        };
+        exitnode_patchtmpl.status = Some(cloud_resource.unwrap());
 
-        // let mut exitnode = exit_nodes.get(&obj.name_any()).await?;
-        // maybe we patch the data like this?
-        exitnode_patchtmpl.status = Some(nya);
-        // exitnode_patchtmpl.spec.auth = Some(exitnode_patchtmpl.get_secret_name());
-        // exitnode_patchtmpl.spec.external_host =
-        // Some(exitnode_patchtmpl.status.as_ref().unwrap().ip.clone());
-        // exitnode_patchtmpl.spec.host = exitnode_patchtmpl.status.as_ref().unwrap().ip.clone();
-
-        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-        // how does it not find the exit node resource
-
-        let _svcs = exit_nodes
+        exit_nodes
             .patch_status(
                 // We can unwrap safely since Service is guaranteed to have a name
                 &obj.name_any(),
                 &serverside.clone(),
                 &Patch::Merge(exitnode_patchtmpl),
             )
-            .await
-            .unwrap();
+            .await?
+    };
 
-        // debug unwrap here, because we dont wanna burn cash
-        // todo: proper handle
-
-        // actually make a cloud resource using CloudProvider
-    }
-
+    // handle deletion
     finalizer::finalizer(
         &exit_nodes,
         EXIT_NODE_FINALIZER,
@@ -551,7 +542,14 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         },
     )
     .await
-    .map_err(|_| crate::error::ReconcileError::NoAvailableExitNodes)
+    .map_err(|e| {
+        crate::error::ReconcileError::KubeError(kube::Error::Api(kube::error::ErrorResponse {
+            code: 500,
+            message: format!("Error applying finalizer for {}", obj.name_any()),
+            reason: e.to_string(),
+            status: "Failure".to_string(),
+        }))
+    })
 
     // Ok(Action::requeue(Duration::from_secs(3600)))
 }

@@ -101,7 +101,7 @@ impl Provisioner for DigitalOceanProvisioner {
         while droplet_ip_opt.is_none() {
             let droplet = api.get_droplet_async(&droplet_id).await?;
 
-            debug!("Droplet: {:#?}", droplet);
+            debug!(?droplet, "Getting droplet data");
 
             if droplet.networks.v4.len() > 0 {
                 // find droplet with `ntype: public`
