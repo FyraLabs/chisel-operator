@@ -1,9 +1,9 @@
-pub fn generate_cloud_init_config(password: &str) -> String {
+pub fn generate_cloud_init_config(password: &str, port: u16) -> String {
     let cloud_config = serde_json::json!({
       "runcmd": ["curl https://i.jpillora.com/chisel! | bash", "systemctl enable --now chisel"],
       "write_files": [{
         "path": "/etc/systemd/system/chisel.service",
-        "content": r#"
+        "content": format!(r#"
       [Unit]
       Description=Chisel Tunnel
       Wants=network-online.target
@@ -19,10 +19,10 @@ pub fn generate_cloud_init_config(password: &str) -> String {
       User=root
       # You can add any additional flags here
       # This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
-      ExecStart=/usr/local/bin/chisel server --port=9090 --reverse
+      ExecStart=/usr/local/bin/chisel server --port={port} --reverse
       # Additional .env file for auth and secrets
       EnvironmentFile=-/etc/sysconfig/chisel
-      "#
+      "#)
       }, {
         "path": "/etc/sysconfig/chisel",
         "content": format!("AUTH=chisel:{}\n", password)
@@ -35,7 +35,7 @@ pub fn generate_cloud_init_config(password: &str) -> String {
 #[test]
 fn test_generate_cloud_init_config() {
     let password = "test";
-    let config = generate_cloud_init_config(password);
+    let config = generate_cloud_init_config(password, 9090);
     println!("{}", config);
     assert!(config.contains("chisel:test"));
 }

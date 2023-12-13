@@ -54,7 +54,7 @@ impl Provisioner for DigitalOceanProvisioner {
 
         let _secret = exit_node.generate_secret(password.clone()).await?;
 
-        let config = generate_cloud_init_config(&password);
+        let config = generate_cloud_init_config(&password, exit_node.spec.port);
 
         // TODO: Secret reference, not plaintext
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth).await?);

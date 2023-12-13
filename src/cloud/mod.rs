@@ -53,7 +53,7 @@ pub struct CloudExitNode {
     pub ip: String,
 }
 
-const CHISEL_PORT: u16 = 9090;
+pub const CHISEL_PORT: u16 = 9090;
 
 #[async_trait]
 pub trait Provisioner {

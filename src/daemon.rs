@@ -250,7 +250,7 @@ async fn exit_node_from_service(
         },
         spec: ExitNodeSpec {
             host: "".to_string(),
-            port: 9090,
+            port: crate::cloud::CHISEL_PORT,
             auth: None,
             external_host: None,
             default_route: true,
