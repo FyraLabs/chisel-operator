@@ -153,6 +153,7 @@ impl Provisioner for DigitalOceanProvisioner {
             Ok(status)
         } else {
             warn!("No status found for exit node, creating new droplet");
+            // TODO: this should be handled by the controller logic
             return self.create_exit_node(auth, exit_node).await;
         }
     }

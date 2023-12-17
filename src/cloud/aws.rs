@@ -4,14 +4,14 @@ use crate::{
     ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL},
 };
 use async_trait::async_trait;
-use aws_config::BehaviorVersion;
+use aws_config::{BehaviorVersion, Region};
+use aws_sdk_ec2::types::{Tag, TagSpecification};
 use base64::Engine;
 use color_eyre::eyre::{anyhow, Error};
 use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
-const AMI_ID: &str = "ami-0df4b2961410d4cff";
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {
@@ -43,7 +43,7 @@ impl AWSIdentity {
         std::env::set_var("AWS_SECRET_ACCESS_KEY", &self.secret_access_key);
         let region: String = self.region.clone();
         Ok(aws_config::defaults(BehaviorVersion::latest())
-            .region(&*region.leak())
+            .region(Region::new(region))
             .load()
             .await)
     }
@@ -53,7 +53,11 @@ impl AWSIdentity {
         let aws_access_key_id: String = secret
             .data
             .as_ref()
-            .and_then(|f| f.get("AWS_ACCESS_KEY_ID"))
+            .and_then(
+                |f: &std::collections::BTreeMap<String, k8s_openapi::ByteString>| {
+                    f.get("AWS_ACCESS_KEY_ID")
+                },
+            )
             .ok_or_else(|| anyhow!("AWS_ACCESS_KEY_ID not found in secret"))
             // into String
             .and_then(|key| String::from_utf8(key.clone().0.to_vec()).map_err(|e| e.into()))?;
@@ -81,37 +85,98 @@ impl Provisioner for AWSProvisioner {
         exit_node: ExitNode,
     ) -> color_eyre::Result<ExitNodeStatus> {
         let provisioner = exit_node
-        .metadata
-        .annotations
-        .as_ref()
-        .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
-        .ok_or_else(|| {
-            anyhow!(
-                "No provisioner found in annotations for exit node {}",
-                exit_node.metadata.name.as_ref().unwrap()
-            )
-        })?;
+            .metadata
+            .annotations
+            .as_ref()
+            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+            .ok_or_else(|| {
+                anyhow!(
+                    "No provisioner found in annotations for exit node {}",
+                    exit_node.metadata.name.as_ref().unwrap()
+                )
+            })?;
 
         let password = generate_password(32);
 
         let cloud_init_config = generate_cloud_init_config(&password, CHISEL_PORT);
         let user_data = base64::engine::general_purpose::STANDARD.encode(cloud_init_config);
 
-        let aws_api = AWSIdentity::from_secret(&auth, self.region.clone())?
+        let aws_api: aws_config::SdkConfig = AWSIdentity::from_secret(&auth, self.region.clone())?
             .generate_aws_config()
             .await?;
 
+        let ssm_client = aws_sdk_ssm::Client::new(&aws_api);
+        let parameter_response = ssm_client
+            .get_parameter()
+            .name("/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id")
+            .send()
+            .await?;
+        let ami = parameter_response.parameter.unwrap().value.unwrap();
+
         let ec2_client = aws_sdk_ec2::Client::new(&aws_api);
 
-        let tag = format!("chisel-operator-provisioner:{}", provisioner);
+        let name = format!(
+            "{}-{}",
+            provisioner,
+            exit_node.metadata.name.as_ref().unwrap()
+        );
 
-        ec2_client.run_instances()
-            .image_id(AMI_ID)
+        let tag_specification = TagSpecification::builder()
+            .resource_type("instance".into())
+            .tags(Tag::builder().key("Name").value(name.clone()).build())
+            .build();
+
+        let instance_response = ec2_client
+            .run_instances()
+            .tag_specifications(tag_specification)
+            .image_id(ami)
             .instance_type("t2.micro".into())
+            .min_count(1)
+            .max_count(1)
             .user_data(&user_data)
-            .send();
+            .send()
+            .await?;
 
-        unimplemented!()
+        let instance = instance_response
+            .instances
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        // TODO: Refactor this to run on a reconcile update instead
+        let public_ip = loop {
+            let describe_response = ec2_client
+                .describe_instances()
+                .instance_ids(instance.instance_id.clone().unwrap())
+                .send()
+                .await?;
+            let reservation = describe_response
+                .reservations
+                .unwrap()
+                .into_iter()
+                .next()
+                .unwrap();
+            let instance = reservation.instances.unwrap().into_iter().next().unwrap();
+
+            debug!(?instance, "Getting instance data");
+
+            if let Some(ip) = instance.public_ip_address {
+                break ip;
+            } else {
+                warn!("Waiting for instance to get IP address");
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
+        };
+
+        let exit_node = ExitNodeStatus {
+            name: name.clone(),
+            ip: public_ip,
+            id: Some(instance.instance_id.unwrap()),
+            provider: provisioner.clone(),
+        };
+
+        Ok(exit_node)
     }
 
     async fn update_exit_node(
@@ -119,10 +184,67 @@ impl Provisioner for AWSProvisioner {
         auth: Secret,
         exit_node: ExitNode,
     ) -> color_eyre::Result<ExitNodeStatus> {
-        unimplemented!()
+        let aws_api: aws_config::SdkConfig = AWSIdentity::from_secret(&auth, self.region.clone())?
+            .generate_aws_config()
+            .await?;
+        let ec2_client = aws_sdk_ec2::Client::new(&aws_api);
+
+        let node = exit_node.clone();
+
+        if let Some(ref status) = &exit_node.status {
+            let instance_id = status.id.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "No instance ID found in status for exit node {}",
+                    node.metadata.name.as_ref().unwrap()
+                )
+            })?;
+
+            let describe_response = ec2_client
+                .describe_instances()
+                .instance_ids(instance_id)
+                .send()
+                .await?;
+            let reservation = describe_response
+                .reservations
+                .unwrap()
+                .into_iter()
+                .next()
+                .unwrap();
+            let instance = reservation.instances.unwrap().into_iter().next().unwrap();
+
+            let mut status = status.clone();
+
+            if let Some(ip) = instance.public_ip_address {
+                status.ip = ip;
+            }
+
+            Ok(status)
+        } else {
+            warn!("No status found for exit node, creating new instance");
+            // TODO: this should be handled by the controller logic
+            return self.create_exit_node(auth, exit_node).await;
+        }
     }
 
     async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()> {
-        unimplemented!()
+        let aws_api: aws_config::SdkConfig = AWSIdentity::from_secret(&auth, self.region.clone())?
+            .generate_aws_config()
+            .await?;
+        let ec2_client = aws_sdk_ec2::Client::new(&aws_api);
+
+        let instance_id = exit_node
+            .status
+            .as_ref()
+            .and_then(|status| status.id.as_ref());
+
+        if let Some(instance_id) = instance_id {
+            ec2_client
+                .terminate_instances()
+                .instance_ids(instance_id)
+                .send()
+                .await?;
+        }
+
+        Ok(())
     }
 }
