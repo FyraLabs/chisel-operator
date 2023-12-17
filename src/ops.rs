@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 #[allow(dead_code)]
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
-pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provider";
+pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provisioner";
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(

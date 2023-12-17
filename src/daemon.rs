@@ -160,7 +160,7 @@ async fn select_exit_node_local(
                     .annotations
                     .as_ref()
                     .map(|annotations| {
-                        annotations.contains_key("chisel-operator.io/exit-node-provider")
+                        annotations.contains_key("chisel-operator.io/exit-node-provisioner")
                     })
                     .unwrap_or(false)
                     || node.status.is_some()

@@ -149,7 +149,7 @@ kind: Service
 metadata:
   name: whoami
   annotations:
-    chisel-operator.io/exit-node-provider: "digitalocean"
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
 spec:
   selector:
     app: whoami
@@ -167,7 +167,7 @@ This is useful if you want to just allocate an entire exit node for a single ser
 
 You can also manually allocate exit nodes, but still let the operator manage the Chisel client deployment. This is useful if you want to allocate a single exit node for multiple services, in case you're on a budget and don't want to pay for multiple exit nodes for each service.
 
-To do this, create an `ExitNode` resource with the annotation `chisel-operator.io/exit-node-provider` set to the name of the `ExitNodeProvisioner` resource.
+To do this, create an `ExitNode` resource with the annotation `chisel-operator.io/exit-node-provisioner` set to the name of the `ExitNodeProvisioner` resource.
 
 ```yaml
 apiVersion: chisel-operator.io/v1
@@ -176,7 +176,7 @@ metadata:
   name: my-exit-node
   namespace: default
   annotations:
-    chisel-operator.io/exit-node-provider: "digitalocean"
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
 spec:
   # IP address of exit node
   # In this case, we will leave this as a blank string, and let the operator allocate an IP address for us

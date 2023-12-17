@@ -4,7 +4,7 @@ metadata:
   name: my-exit-node
   namespace: default
   annotations:
-    chisel-operator.io/exit-node-provider: "digitalocean"
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
 spec:
   # IP address of exit node
   host: ""
