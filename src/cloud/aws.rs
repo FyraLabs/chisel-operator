@@ -19,6 +19,8 @@ pub struct AWSProvisioner {
     pub region: String,
     /// Reference to a secret containing the AWS access key ID and secret access key, under the access_key_id and secret_access_key keys
     pub auth: String,
+    /// Security group name to use for the exit node, uses the default security group if not specified
+    pub security_group: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -126,16 +128,20 @@ impl Provisioner for AWSProvisioner {
             .tags(Tag::builder().key("Name").value(name.clone()).build())
             .build();
 
-        let instance_response = ec2_client
+        let mut instance_builder = ec2_client
             .run_instances()
             .tag_specifications(tag_specification)
             .image_id(ami)
             .instance_type("t2.micro".into())
             .min_count(1)
             .max_count(1)
-            .user_data(&user_data)
-            .send()
-            .await?;
+            .user_data(&user_data);
+
+        if let Some(security_group) = &self.security_group {
+            instance_builder = instance_builder.security_group_ids(security_group);
+        }
+
+        let instance_response = instance_builder.send().await?;
 
         let instance = instance_response
             .instances
