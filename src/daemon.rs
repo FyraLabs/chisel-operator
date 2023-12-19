@@ -148,6 +148,9 @@ async fn select_exit_node_local(
             .ok_or(ReconcileError::NoAvailableExitNodes)
     } else {
         // otherwise, use the first available exit node
+        // BUG: This will always return the first exit node, even if it is not ready
+        // todo: We would want to add a status for every exit node and only bind one service to one exit node
+        // (one to one mapping)
         let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
         let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
         node_list
@@ -163,7 +166,7 @@ async fn select_exit_node_local(
                         annotations.contains_key("chisel-operator.io/exit-node-provisioner")
                     })
                     .unwrap_or(false)
-                    || node.status.is_some()
+                    // || node.status.is_some()
             })
             .collect::<Vec<ExitNode>>()
             .first()
