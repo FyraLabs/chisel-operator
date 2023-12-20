@@ -47,7 +47,8 @@ use std::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::ops::{
-    ExitNode, ExitNodeProvisioner, ExitNodeSpec, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
+    ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, ServiceBinding,
+    EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 #[allow(dead_code)]
@@ -152,21 +153,26 @@ async fn select_exit_node_local(
         // todo: We would want to add a status for every exit node and only bind one service to one exit node
         // (one to one mapping)
         let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
-        let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+        let node_list: kube::core::ObjectList<ExitNode> =
+            nodes.list(&ListParams::default().timeout(30)).await?;
         node_list
             .items
             .into_iter()
             .filter(|node| {
-                // Is the ExitNode not cloud provisioned OR is status set
-                !node
+                // Is the ExitNode not cloud provisioned
+                (!node
                     .metadata
                     .annotations
                     .as_ref()
-                    .map(|annotations| {
-                        annotations.contains_key("chisel-operator.io/exit-node-provisioner")
-                    })
+                    .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
                     .unwrap_or(false)
-                    // || node.status.is_some()
+                    // OR is status set
+                    || node.status.is_some())
+                    && !node
+                        .status
+                        .as_ref()
+                        .map(|s| s.service_binding.is_some())
+                        .unwrap_or(false)
             })
             .collect::<Vec<ExitNode>>()
             .first()
@@ -310,13 +316,27 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // We can unwrap safely since Service is namespaced scoped
     let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+    let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
 
     let mut svc = services.get_status(&obj.name_any()).await?;
 
     let obj = svc.clone();
 
+    let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+    let existing_node = node_list.iter().find(|node| {
+        node.status
+            .as_ref()
+            .and_then(|status| status.service_binding.as_ref())
+            .map(|binding| {
+                binding.name == obj.name_any() && binding.namespace == obj.namespace().unwrap()
+            })
+            .unwrap_or(false)
+    });
+
     let node = {
-        if check_service_managed(&obj).await {
+        if let Some(node) = existing_node {
+            node.clone()
+        } else if check_service_managed(&obj).await {
             let provisioner = obj
                 .metadata
                 .annotations
@@ -353,18 +373,18 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // debug!(?exit_node_ip, "Exit node IP");
 
-    if svc
-        .status
-        .as_ref()
-        .and_then(|status| status.load_balancer.as_ref())
-        .and_then(|lb| lb.ingress.as_ref())
-        .and_then(|ingress| ingress.first())
-        .and_then(|ingress| ingress.ip.as_ref())
-        == Some(&exit_node_ip)
-    {
-        info!("Load balancer IP is already set, not patching");
-        return Ok(Action::requeue(Duration::from_secs(3600)));
-    }
+    // if svc
+    //     .status
+    //     .as_ref()
+    //     .and_then(|status| status.load_balancer.as_ref())
+    //     .and_then(|lb| lb.ingress.as_ref())
+    //     .and_then(|ingress| ingress.first())
+    //     .and_then(|ingress| ingress.ip.as_ref())
+    //     == Some(&exit_node_ip)
+    // {
+    //     info!("Load balancer IP is already set, not patching");
+    //     return Ok(Action::requeue(Duration::from_secs(3600)));
+    // }
 
     svc.status = Some(ServiceStatus {
         load_balancer: Some(LoadBalancerStatus {
@@ -376,6 +396,31 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         }),
         ..Default::default()
     });
+
+    // set service binding to exit node
+
+    let namespaced_nodes: Api<ExitNode> =
+        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+
+    let node_data = serde_json::json!({
+        "status": {
+            "service_binding": ServiceBinding {
+                namespace: obj.namespace().unwrap(),
+                name: obj.name_any()
+            }
+        }
+    });
+
+    let _nodes = namespaced_nodes
+        .patch_status(
+            // We can unwrap safely since Service is guaranteed to have a name
+            node.name_any().as_str(),
+            &serverside.clone(),
+            &Patch::Merge(&node_data),
+        )
+        .await?;
+
+    info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
 
     // Update the status for the LoadBalancer service
     // The ExitNode IP will always be set, so it is safe to unwrap the host
@@ -393,7 +438,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         )
         .await?;
 
-    info!(status = ?obj, "Patched status for {}", obj.name_any());
+    info!(status = ?obj, "Patched status for service {}", obj.name_any());
 
     // We can unwrap safely since ExitNode is namespaced scoped
     let deployments: Api<Deployment> =
@@ -440,7 +485,7 @@ fn error_policy_exit_node(
     error!(err = ?err);
     Action::requeue(Duration::from_secs(5))
 }
-
+const UNMANAGED_PROVISIONER: &str = "unmanaged";
 #[instrument(skip(ctx))]
 async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     info!("exit node reconcile request: {}", obj.name_any());
@@ -449,9 +494,39 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
     debug!(?is_managed, "exit node is managed by cloud provisioner?");
 
-    // if !is_managed {
-    //     return Ok(Action::await_change());
-    // }
+    if !is_managed && obj.status.is_none() {
+        // add status to exit node if it's not managed
+
+        let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
+        let mut exitnode_patchtmpl = nodes.get(&obj.name_any()).await?;
+
+        // now we set the status, but the provisioner is unmanaged
+        // so we just copy the IP from the exit node config to the status
+
+        let exit_node_ip = obj.get_host();
+
+        exitnode_patchtmpl.status = Some(ExitNodeStatus {
+            provider: UNMANAGED_PROVISIONER.to_string(),
+            name: obj.name_any(),
+            ip: exit_node_ip,
+            id: None,
+            service_binding: None,
+        });
+
+        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+
+        let _node = nodes
+            .patch_status(
+                // We can unwrap safely since Service is guaranteed to have a name
+                &obj.name_any(),
+                &serverside.clone(),
+                &Patch::Merge(exitnode_patchtmpl),
+            )
+            .await?;
+
+        return Ok(Action::await_change());
+    }
 
     let provisioner = obj
         .metadata
@@ -465,8 +540,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
     let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
-
-    let mut exitnode_patchtmpl = exit_nodes.get(&obj.name_any()).await?;
 
     let provisioner_api = provisioner.clone().spec.get_inner();
 
@@ -493,14 +566,17 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 .create_exit_node(secret.clone(), (*obj).clone())
                 .await
         };
-        exitnode_patchtmpl.status = Some(cloud_resource?);
+        // TODO: Don't replace the entire status and object, sadly JSON is better here
+        let exitnode_patch = serde_json::json!({
+            "status": cloud_resource?
+        });
 
         exit_nodes
             .patch_status(
                 // We can unwrap safely since Service is guaranteed to have a name
                 &obj.name_any(),
                 &serverside.clone(),
-                &Patch::Merge(exitnode_patchtmpl),
+                &Patch::Merge(exitnode_patch),
             )
             .await?
     };
@@ -558,6 +634,10 @@ pub async fn run() -> color_eyre::Result<()> {
     let mut reconcilers = vec![];
 
     info!("Starting reconcilers...");
+
+    // TODO: figure out how to do this in a single controller because there is a potential race where the exit node reconciler runs at the same time as the service one
+    // This is an issue because both of these functions patch the status of the exit node
+    // or if we can figure out a way to atomically patch the status of the exit node, that could be fine too, since both ops are just updates anyways lmfao
 
     reconcilers.push(
         Controller::new(services, Config::default())

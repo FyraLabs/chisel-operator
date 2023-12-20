@@ -120,6 +120,13 @@ pub struct ExitNodeStatus {
     // pub password: String,
     pub ip: String,
     pub id: Option<String>,
+    pub service_binding: Option<ServiceBinding>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+
+pub struct ServiceBinding {
+    pub namespace: String,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]

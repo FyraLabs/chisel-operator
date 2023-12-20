@@ -100,6 +100,7 @@ impl Provisioner for LinodeProvisioner {
             name: instance.label,
             provider: provisioner.to_string(),
             id: Some(instance.id.to_string()),
+            service_binding: None
         };
 
         Ok(status)

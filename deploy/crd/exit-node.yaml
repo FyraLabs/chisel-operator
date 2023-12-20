@@ -12,65 +12,76 @@ spec:
     singular: exitnode
   scope: Namespaced
   versions:
-  - additionalPrinterColumns: []
-    name: v1
-    schema:
-      openAPIV3Schema:
-        description: Auto-generated derived type for ExitNodeSpec via `CustomResource`
-        properties:
-          spec:
-            description: ExitNode is a custom resource that represents a Chisel exit node. It will be used as the reverse proxy for all services in the cluster.
-            properties:
-              auth:
-                description: Optional authentication secret name to connect to the control plane
-                nullable: true
-                type: string
-              default_route:
-                default: false
-                description: Optional boolean value for whether to make the exit node the default route for the cluster If true, the exit node will be the default route for the cluster default value is false
-                type: boolean
-              external_host:
-                description: Optional real external hostname/IP of exit node If not provided, the host field will be used
-                nullable: true
-                type: string
-              fingerprint:
-                description: Optional but highly recommended fingerprint to perform host-key validation against the server's public key
-                nullable: true
-                type: string
-              host:
-                description: Hostname or IP address of the chisel server
-                type: string
-              port:
-                description: Control plane port of the chisel server
-                format: uint16
-                minimum: 0.0
-                type: integer
-            required:
-            - host
-            - port
-            type: object
-          status:
-            nullable: true
-            properties:
-              id:
-                nullable: true
-                type: string
-              ip:
-                type: string
-              name:
-                type: string
-              provider:
-                type: string
-            required:
-            - ip
-            - name
-            - provider
-            type: object
-        required:
-        - spec
-        title: ExitNode
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
+    - additionalPrinterColumns: []
+      name: v1
+      schema:
+        openAPIV3Schema:
+          description: Auto-generated derived type for ExitNodeSpec via `CustomResource`
+          properties:
+            spec:
+              description: ExitNode is a custom resource that represents a Chisel exit node. It will be used as the reverse proxy for all services in the cluster.
+              properties:
+                auth:
+                  description: Optional authentication secret name to connect to the control plane
+                  nullable: true
+                  type: string
+                default_route:
+                  default: false
+                  description: Optional boolean value for whether to make the exit node the default route for the cluster If true, the exit node will be the default route for the cluster default value is false
+                  type: boolean
+                external_host:
+                  description: Optional real external hostname/IP of exit node If not provided, the host field will be used
+                  nullable: true
+                  type: string
+                fingerprint:
+                  description: Optional but highly recommended fingerprint to perform host-key validation against the server's public key
+                  nullable: true
+                  type: string
+                host:
+                  description: Hostname or IP address of the chisel server
+                  type: string
+                port:
+                  description: Control plane port of the chisel server
+                  format: uint16
+                  minimum: 0.0
+                  type: integer
+              required:
+                - host
+                - port
+              type: object
+            status:
+              nullable: true
+              properties:
+                id:
+                  nullable: true
+                  type: string
+                ip:
+                  type: string
+                name:
+                  type: string
+                provider:
+                  type: string
+                service_binding:
+                  nullable: true
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                    - name
+                    - namespace
+                  type: object
+              required:
+                - ip
+                - name
+                - provider
+              type: object
+          required:
+            - spec
+          title: ExitNode
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

@@ -180,6 +180,7 @@ impl Provisioner for AWSProvisioner {
             ip: public_ip,
             id: Some(instance.instance_id.unwrap()),
             provider: provisioner.clone(),
+            service_binding: None
         };
 
         Ok(exit_node)

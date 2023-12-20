@@ -120,6 +120,7 @@ impl Provisioner for DigitalOceanProvisioner {
             ip: droplet_ip.clone(),
             id: Some(droplet.id.to_string()),
             provider: provisioner.clone(),
+            service_binding: None
         };
 
         Ok(exit_node)
