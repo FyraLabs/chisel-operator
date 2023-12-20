@@ -53,6 +53,9 @@ spec:
                     default: ''
                     description: Region ID of the DigitalOcean datacenter to provision the exit node in If empty, DigitalOcean will randomly select a region for you, which might not be what you want
                     type: string
+                  size:
+                    default: s-1vcpu-1gb
+                    type: string
                   ssh_fingerprints:
                     default: []
                     description: SSH key fingerprints to add to the exit node

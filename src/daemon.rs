@@ -590,6 +590,54 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             .as_ref()
             .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
             .unwrap();
+        if let Some(status) = &obj.status {
+            // Check for mismatch between annotation's provisioner and status' provisioner
+            if &status.provider != provisioner {
+                // Destroy cloud resource
+                warn!("Cloud provisioner mismatch, destroying cloud resource found in status");
+
+                let old_provider = status.provider.clone();
+
+                let old_provisioner =
+                    find_exit_node_provisioner_from_label(ctx.clone(), &old_provider)
+                        .await
+                        .ok_or(ReconcileError::CloudProvisionerNotFound)?;
+
+                let old_provisioner_api = old_provisioner.clone().spec.get_inner();
+
+                let secret = old_provisioner
+                    .find_secret()
+                    .await
+                    .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
+                    .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
+
+                old_provisioner_api
+                    .delete_exit_node(secret, (*obj).clone())
+                    .await?;
+
+                // Now blank out the status
+
+                let nodes: Api<ExitNode> =
+                    Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
+
+                let exitnode_patch = serde_json::json!({
+                    "status": None::<ExitNodeStatus>
+                });
+
+                info!("Clearing status for exit node {}", obj.name_any());
+
+                let _node = nodes
+                    .patch_status(
+                        // We can unwrap safely since Service is guaranteed to have a name
+                        &obj.name_any(),
+                        &serverside.clone(),
+                        &Patch::Merge(exitnode_patch),
+                    )
+                    .await?;
+            }
+        }
+
         let provisioner = find_exit_node_provisioner_from_label(ctx.clone(), provisioner)
             .await
             .ok_or(ReconcileError::CloudProvisionerNotFound)?;

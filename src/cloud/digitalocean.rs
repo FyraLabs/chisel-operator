@@ -7,6 +7,11 @@ use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
+const DROPLET_SIZE: &str = "s-1vcpu-1gb";
+const DROPLET_IMAGE: &str = "ubuntu-23-04-x64";
+
+const TOKEN_KEY: &str = "DIGITALOCEAN_TOKEN";
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct DigitalOceanProvisioner {
@@ -19,12 +24,13 @@ pub struct DigitalOceanProvisioner {
     /// SSH key fingerprints to add to the exit node
     #[serde(default)]
     pub ssh_fingerprints: Vec<String>,
+
+    #[serde(default = "default_size")]
+    pub size: String,
 }
-
-const DROPLET_SIZE: &str = "s-1vcpu-1gb";
-const DROPLET_IMAGE: &str = "ubuntu-23-04-x64";
-
-const TOKEN_KEY: &str = "DIGITALOCEAN_TOKEN";
+fn default_size() -> String {
+    String::from(DROPLET_SIZE)
+}
 
 // each provider must support create, update, delete operations
 
@@ -83,7 +89,7 @@ impl Provisioner for DigitalOceanProvisioner {
 
         let droplet = {
             let mut droplet = api
-                .create_droplet(&name, DROPLET_SIZE, DROPLET_IMAGE)
+                .create_droplet(&name, &self.size, DROPLET_IMAGE)
                 .user_data(&config)
                 .ssh_keys(self.ssh_fingerprints.clone())
                 .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)]);
