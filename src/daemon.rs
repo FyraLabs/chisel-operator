@@ -53,6 +53,8 @@ use crate::ops::{
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 #[allow(dead_code)]
 pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
+pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
+
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
 //     // opentelemetry::Context -> opentelemetry::trace::Span
 //     use opentelemetry::trace::TraceContextExt as _;
@@ -397,31 +399,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         ..Default::default()
     });
 
-    // set service binding to exit node
-
-    let namespaced_nodes: Api<ExitNode> =
-        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
-
-    let node_data = serde_json::json!({
-        "status": {
-            "service_binding": ServiceBinding {
-                namespace: obj.namespace().unwrap(),
-                name: obj.name_any()
-            }
-        }
-    });
-
-    let _nodes = namespaced_nodes
-        .patch_status(
-            // We can unwrap safely since Service is guaranteed to have a name
-            node.name_any().as_str(),
-            &serverside.clone(),
-            &Patch::Merge(&node_data),
-        )
-        .await?;
-
-    info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
-
     // Update the status for the LoadBalancer service
     // The ExitNode IP will always be set, so it is safe to unwrap the host
 
@@ -459,7 +436,81 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     tracing::trace!("deployment: {:?}", _deployment);
 
-    Ok(Action::requeue(Duration::from_secs(3600)))
+    // set service binding to exit node
+
+    let namespaced_nodes: Api<ExitNode> =
+        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+
+    finalizer::finalizer(
+        &services,
+        SVCS_FINALIZER,
+        obj.clone().into(),
+        |event| async move {
+            let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
+                Event::Apply(svc) => {
+                    let node_data = serde_json::json!({
+                        "status": {
+                            "service_binding": ServiceBinding {
+                                namespace: svc.namespace().unwrap(),
+                                name: svc.name_any()
+                            }
+                        }
+                    });
+                    let _nodes = namespaced_nodes
+                        .patch_status(
+                            // We can unwrap safely since Service is guaranteed to have a name
+                            node.name_any().as_str(),
+                            &serverside.clone(),
+                            &Patch::Merge(&node_data),
+                        )
+                        .await?;
+
+                    info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
+                    Ok(Action::requeue(Duration::from_secs(3600)))
+                }
+                Event::Cleanup(svc) => {
+                    info!("Cleanup finalizer triggered for {}", svc.name_any());
+                    let node_data = serde_json::json!({
+                        "status": {
+                            "service_binding": Option::<ServiceBinding>::None
+                        }
+                    });
+                    let _nodes = namespaced_nodes
+                        .patch_status(
+                            // We can unwrap safely since Service is guaranteed to have a name
+                            node.name_any().as_str(),
+                            &serverside.clone(),
+                            &Patch::Merge(&node_data),
+                        )
+                        .await?;
+
+                    info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
+                    Ok(Action::requeue(Duration::from_secs(3600)))
+                }
+            };
+            m
+        },
+    )
+    .await
+    .map_err(|e| {
+        crate::error::ReconcileError::KubeError(kube::Error::Api(kube::error::ErrorResponse {
+            code: 500,
+            message: format!("Error applying finalizer for {}", obj.name_any()),
+            reason: e.to_string(),
+            status: "Failure".to_string(),
+        }))
+    })
+
+    // let node_data = serde_json::json!({
+    //     "status": {
+    //         "service_binding": ServiceBinding {
+    //             namespace: obj.namespace().unwrap(),
+    //             name: obj.name_any()
+    //         }
+    //     }
+    // });
+
+    // Ok(Action::requeue(Duration::from_secs(3600)))
 
     // if obj_ip == Some(exit_node_ip.as_str())
     // {
