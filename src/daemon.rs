@@ -579,79 +579,116 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         return Ok(Action::await_change());
     }
 
+    let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+
     let provisioner = obj
         .metadata
         .annotations
         .as_ref()
         .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
-        .unwrap();
+        .and_then(|provisioner| {
+            find_exit_node_provisioner_from_label(ctx.clone(), provisioner)
+                .now_or_never()
+                .unwrap()
+        });
 
-    let provisioner = find_exit_node_provisioner_from_label(ctx.clone(), provisioner)
-        .await
-        .ok_or(ReconcileError::CloudProvisionerNotFound)?;
-
-    let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
-
-    let provisioner_api = provisioner.clone().spec.get_inner();
+    let provisioner_api = provisioner
+        .clone()
+        .map(|provisioner| provisioner.spec.get_inner());
 
     // finalizer for exit node
     let secret = provisioner
-        .find_secret()
-        .await
-        .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
-        .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
+        .clone()
+        .and_then(|provisioner| {
+            provisioner
+                .clone()
+                .find_secret()
+                .now_or_never()
+                .or_else(|| {
+                    Some(Err(ReconcileError::KubeError(kube::Error::Api(
+                        kube::error::ErrorResponse {
+                            code: 500,
+                            message: format!(
+                                "Error finding secret for provisioner {}",
+                                provisioner.name_any()
+                            ),
+                            reason: "SecretNotFound".to_string(),
+                            status: "Failure".to_string(),
+                        },
+                    ))
+                    .into()))
+                })
+        })
+        .unwrap_or_else(|| {
+            let provisioner = provisioner.clone().unwrap();
+            Err(color_eyre::eyre::anyhow!(
+                "Error finding secret for provisioner {}",
+                provisioner.name_any()
+            ))
+        })?;
 
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-
-    //? maybe we move this to finalizer's apply function?
-
-    let _node = {
-        let cloud_resource = if let Some(_status) = obj.status.as_ref() {
-            info!("Updating cloud resource for {}", obj.name_any());
-            provisioner_api
-                .update_exit_node(secret.clone(), (*obj).clone())
-                .await
-        } else {
-            info!("Creating cloud resource for {}", obj.name_any());
-            provisioner_api
-                .create_exit_node(secret.clone(), (*obj).clone())
-                .await
-        };
-        // TODO: Don't replace the entire status and object, sadly JSON is better here
-        let exitnode_patch = serde_json::json!({
-            "status": cloud_resource?
-        });
-
-        exit_nodes
-            .patch_status(
-                // We can unwrap safely since Service is guaranteed to have a name
-                &obj.name_any(),
-                &serverside.clone(),
-                &Patch::Merge(exitnode_patch),
-            )
-            .await?
-    };
+    // what in the name of all that is good is this
+    // !? why do we have to unwrap()
 
     // handle deletion
     finalizer::finalizer(
-        &exit_nodes,
+        &exit_nodes.clone(),
         EXIT_NODE_FINALIZER,
         obj.clone(),
         |event| async move {
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
-                Event::Apply(_) => Ok(Action::requeue(Duration::from_secs(3600))),
+                Event::Apply(node) => {
+                    if let Some(provisioner_api) = provisioner_api {
+                        if is_managed {
+                            let secret = secret.unwrap();
+                            let _node = {
+                                let cloud_resource = if let Some(_status) = node.status.as_ref() {
+                                    info!("Updating cloud resource for {}", node.name_any());
+                                    provisioner_api
+                                        .update_exit_node(secret.clone(), (*node).clone())
+                                        .await
+                                } else {
+                                    info!("Creating cloud resource for {}", node.name_any());
+                                    provisioner_api
+                                        .create_exit_node(secret.clone(), (*node).clone())
+                                        .await
+                                };
+                                // TODO: Don't replace the entire status and object, sadly JSON is better here
+                                let exitnode_patch = serde_json::json!({
+                                    "status": cloud_resource?
+                                });
+
+                                exit_nodes
+                                    .patch_status(
+                                        // We can unwrap safely since Service is guaranteed to have a name
+                                        &node.name_any(),
+                                        &serverside.clone(),
+                                        &Patch::Merge(exitnode_patch),
+                                    )
+                                    .await?
+                            };
+                        }
+                    }
+
+                    Ok(Action::requeue(Duration::from_secs(3600)))
+                }
                 Event::Cleanup(node) => {
                     info!("Cleanup finalizer triggered for {}", node.name_any());
 
-                    if is_managed {
-                        info!("Deleting cloud resource for {}", node.name_any());
-                        provisioner_api
-                            .delete_exit_node(secret, (*node).clone())
-                            .await
-                            .unwrap_or_else(|e| {
-                                error!(?e, "Error deleting exit node {}", node.name_any())
-                            });
+                    if let Some(provisioner_api) = provisioner_api {
+                        if is_managed {
+                            let secret = secret.unwrap();
+                            info!("Deleting cloud resource for {}", node.name_any());
+                            provisioner_api
+                                .delete_exit_node(secret, (*node).clone())
+                                .await
+                                .unwrap_or_else(|e| {
+                                    error!(?e, "Error deleting exit node {}", node.name_any())
+                                });
+                        }
                     }
+
                     Ok(Action::requeue(Duration::from_secs(3600)))
                 }
             };
