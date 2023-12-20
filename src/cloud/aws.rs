@@ -12,6 +12,11 @@ use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
+const DEFAULT_SIZE: &str = "t2.micro";
+
+fn default_size() -> String {
+    String::from(DEFAULT_SIZE)
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {
@@ -21,6 +26,9 @@ pub struct AWSProvisioner {
     pub auth: String,
     /// Security group name to use for the exit node, uses the default security group if not specified
     pub security_group: Option<String>,
+    /// Size for the EC2 instance
+    #[serde(default = "default_size")]
+    pub size: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -132,7 +140,7 @@ impl Provisioner for AWSProvisioner {
             .run_instances()
             .tag_specifications(tag_specification)
             .image_id(ami)
-            .instance_type("t2.micro".into())
+            .instance_type(self.size.as_str().into())
             .min_count(1)
             .max_count(1)
             .user_data(&user_data);
@@ -180,7 +188,7 @@ impl Provisioner for AWSProvisioner {
             ip: public_ip,
             id: Some(instance.instance_id.unwrap()),
             provider: provisioner.clone(),
-            service_binding: None
+            service_binding: None,
         };
 
         Ok(exit_node)

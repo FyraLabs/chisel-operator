@@ -12,12 +12,19 @@ use tracing::{debug, info, warn};
 const TOKEN_KEY: &str = "LINODE_TOKEN";
 const INSTANCE_TYPE: &str = "g6-nanode-1";
 const IMAGE_ID: &str = "linode/ubuntu22.04";
+
+fn default_size() -> String {
+    String::from(INSTANCE_TYPE)
+}
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
     /// Name of the secret containing the Linode API token
     pub auth: String,
     /// Region ID of the Linode datacenter to provision the exit node in
     pub region: String,
+    /// Size for the Linode instance
+    #[serde(default = "default_size")]
+    pub size: String,
 }
 
 impl LinodeProvisioner {
@@ -70,7 +77,7 @@ impl Provisioner for LinodeProvisioner {
         );
 
         let mut instance = api
-            .create_instance(&self.region, INSTANCE_TYPE)
+            .create_instance(&self.region, &self.size)
             .root_pass(&password)
             .label(&name)
             .user_data(&user_data)
