@@ -36,6 +36,10 @@ spec:
                   region:
                     description: Region ID for the AWS region to provision the exit node in
                     type: string
+                  security_group:
+                    description: Security group name to use for the exit node, uses the default security group if not specified
+                    nullable: true
+                    type: string
                 required:
                 - auth
                 - region
@@ -78,4 +82,3 @@ spec:
     served: true
     storage: true
     subresources: {}
-
