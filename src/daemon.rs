@@ -430,7 +430,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         .patch(
             &deployment_data.name_any(),
             &serverside,
-            &Patch::Apply(deployment_data),
+            &Patch::Apply(deployment_data.clone()),
         )
         .await?;
 
@@ -485,6 +485,17 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
                         .await?;
 
                     info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
+
+                    // Clean up deployment when service is deleted
+
+                    let deployments: Api<Deployment> =
+                        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+
+                    info!("Deleting deployment for {}", svc.name_any());
+
+                    let _deployment = deployments
+                        .delete(deployment_data.name_any().as_str(), &Default::default())
+                        .await?;
                     Ok(Action::requeue(Duration::from_secs(3600)))
                 }
             };

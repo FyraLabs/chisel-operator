@@ -239,7 +239,7 @@ pub async fn create_owned_deployment(
     source: &Service,
     exit_node: &ExitNode,
 ) -> Result<Deployment, ReconcileError> {
-    let oref = source.controller_owner_ref(&()).ok_or_else(|| {
+    let oref = exit_node.controller_owner_ref(&()).ok_or_else(|| {
         ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
             code: 500,
             message: "Service is missing owner reference".to_string(),
@@ -247,6 +247,8 @@ pub async fn create_owned_deployment(
             status: "Failure".to_string(),
         }))
     })?;
+
+    // cross namespace owner reference is not allowed so we link to exit node as its owner
 
     let service_name = source.metadata.name.as_ref().ok_or_else(|| {
         ReconcileError::KubeError(kube::Error::Api(ErrorResponse {
@@ -261,7 +263,7 @@ pub async fn create_owned_deployment(
         metadata: ObjectMeta {
             name: Some(format!("chisel-{}", service_name)),
             owner_references: Some(vec![oref]),
-            namespace: exit_node.metadata.namespace.clone(),
+            // namespace: exit_node.metadata.namespace.clone(),
             ..ObjectMeta::default()
         },
         spec: Some(DeploymentSpec {
