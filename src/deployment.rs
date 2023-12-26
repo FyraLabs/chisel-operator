@@ -261,6 +261,7 @@ pub async fn create_owned_deployment(
         metadata: ObjectMeta {
             name: Some(format!("chisel-{}", service_name)),
             owner_references: Some(vec![oref]),
+            namespace: exit_node.metadata.namespace.clone(),
             ..ObjectMeta::default()
         },
         spec: Some(DeploymentSpec {
