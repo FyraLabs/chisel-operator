@@ -620,7 +620,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 let nodes: Api<ExitNode> =
                     Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
-
                 let exitnode_patch = serde_json::json!({
                     "status": None::<ExitNodeStatus>
                 });
@@ -688,6 +687,35 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                     }
                     Event::Cleanup(node) => {
                         info!("Cleanup finalizer triggered for {}", node.name_any());
+
+                        // Okay, now we should also clear the service status if this node has a service binding
+
+                        if let Some(status) = node.status {
+                            if let Some(binding) = status.service_binding {
+                                info!("Clearing service binding for {}", node.name_any());
+
+                                // get service API
+                                let services: Api<Service> =
+                                    Api::namespaced(ctx.client.clone(), &binding.namespace);
+
+                                let patch = serde_json::json!({
+                                    "status": {
+                                        "load_balancer": None::<LoadBalancerStatus>
+                                    }
+                                });
+
+                                let _svc = services
+                                    .patch_status(
+                                        // We can unwrap safely since Service is guaranteed to have a name
+                                        &binding.name,
+                                        &serverside.clone(),
+                                        &Patch::Merge(patch),
+                                    )
+                                    .await?;
+
+                                info!("Cleared service binding for {}", node.name_any());
+                            }
+                        }
 
                         if is_managed {
                             info!("Deleting cloud resource for {}", node.name_any());
