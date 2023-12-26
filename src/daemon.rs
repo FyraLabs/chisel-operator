@@ -690,8 +690,8 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
                         // Okay, now we should also clear the service status if this node has a service binding
 
-                        if let Some(status) = node.status {
-                            if let Some(binding) = status.service_binding {
+                        if let Some(status) = &node.status {
+                            if let Some(binding) = &status.service_binding {
                                 info!("Clearing service binding for {}", node.name_any());
 
                                 // get service API
