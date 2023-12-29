@@ -91,8 +91,6 @@ dependencies = [
  "aws-credential-types",
  "aws-http",
  "aws-runtime",
- "aws-sdk-sso",
- "aws-sdk-ssooidc",
  "aws-sdk-sts",
  "aws-smithy-async",
  "aws-smithy-http",
@@ -103,14 +101,11 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand",
- "hex",
  "http",
  "hyper",
- "ring",
  "time",
  "tokio",
  "tracing",
- "zeroize",
 ]
 
 [[package]]
@@ -205,52 +200,6 @@ dependencies = [
  "aws-types",
  "bytes",
  "fastrand",
- "http",
- "once_cell",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
-name = "aws-sdk-sso"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86b1779a72c60d45e5699512310d7f6fb965fecc8f7419ce1b993b716f0026fd"
-dependencies = [
- "aws-credential-types",
- "aws-http",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
- "http",
- "once_cell",
- "regex-lite",
- "tracing",
-]
-
-[[package]]
-name = "aws-sdk-ssooidc"
-version = "1.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90fb130cc2a21a2a6ef2b7730565cffb447aebb18c9a468e56ffb5cc97bfc077"
-dependencies = [
- "aws-credential-types",
- "aws-http",
- "aws-runtime",
- "aws-smithy-async",
- "aws-smithy-http",
- "aws-smithy-json",
- "aws-smithy-runtime",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "aws-types",
- "bytes",
  "http",
  "once_cell",
  "regex-lite",
@@ -369,11 +318,9 @@ dependencies = [
  "http",
  "http-body",
  "hyper",
- "hyper-rustls",
  "once_cell",
  "pin-project-lite",
  "pin-utils",
- "rustls",
  "tokio",
  "tracing",
 ]
@@ -391,7 +338,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tracing",
- "zeroize",
 ]
 
 [[package]]
@@ -561,11 +507,13 @@ dependencies = [
  "aws-config",
  "aws-sdk-ec2",
  "aws-sdk-ssm",
+ "aws-smithy-runtime",
  "base64 0.21.5",
  "color-eyre",
  "digitalocean-rs",
  "dotenvy",
  "futures",
+ "hyper-rustls",
  "k8s-openapi",
  "kube",
  "linode-rs",
@@ -1121,6 +1069,7 @@ dependencies = [
  "rustls-native-certs",
  "tokio",
  "tokio-rustls",
+ "webpki-roots",
 ]
 
 [[package]]

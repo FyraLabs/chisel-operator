@@ -6,6 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ec2::types::{Tag, TagSpecification};
+use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use base64::Engine;
 use color_eyre::eyre::{anyhow, Error};
 use k8s_openapi::api::core::v1::Secret;
@@ -48,12 +49,24 @@ impl AWSIdentity {
     }
     /// Generate an AWS config from the access key ID and secret access key
     pub async fn generate_aws_config(self) -> color_eyre::Result<aws_config::SdkConfig> {
+        // We use our own hyper client and TLS config in order to use webpki-roots instead of the system ones
+        // This let's us use a sane set of root certificates instead of the ones that come with the OS
+        let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_only()
+            .enable_http1()
+            .enable_http2()
+            .build();
+
+        let hyper_client = HyperClientBuilder::new().build(tls_connector);
+
         // set access key id and secret access key as environment variables
         std::env::set_var("AWS_ACCESS_KEY_ID", &self.access_key_id);
         std::env::set_var("AWS_SECRET_ACCESS_KEY", &self.secret_access_key);
         let region: String = self.region.clone();
         Ok(aws_config::defaults(BehaviorVersion::latest())
             .region(Region::new(region))
+            .http_client(hyper_client)
             .load()
             .await)
     }
