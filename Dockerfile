@@ -5,7 +5,8 @@ WORKDIR /app
 COPY . /app
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 # copy build artifact somewhere accessible so we can copy it in the next stage
-RUN cargo build --release && cp /app/target/release/chisel-operator /app/chisel-operator
+RUN --mount=type=cache,target=/root/.cargo cargo build --release
+RUN cp /app/target/release/chisel-operator /app/chisel-operator
 
 FROM redhat/ubi9-micro:latest
 # RUN useradd -u 1001 chisel
