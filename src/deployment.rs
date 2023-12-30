@@ -210,7 +210,13 @@ pub async fn create_pod_template(
         spec: Some(PodSpec {
             containers: vec![Container {
                 args: Some(args),
-                image: Some("jpillora/chisel".to_string()),
+                image: Some(
+                    exit_node
+                        .spec
+                        .chisel_image
+                        .clone()
+                        .unwrap_or_else(|| "jpillora/chisel".to_string()),
+                ),
                 name: "chisel".to_string(),
                 env,
                 ..Default::default()

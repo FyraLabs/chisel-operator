@@ -39,6 +39,9 @@ pub struct ExitNodeSpec {
     pub fingerprint: Option<String>,
     /// Optional authentication secret name to connect to the control plane
     pub auth: Option<String>,
+    /// Optional value for the chisel client image used to connect to the chisel server
+    /// If not provided, jpillora/chisel:latest is used
+    pub chisel_image: Option<String>,
     /// Optional boolean value for whether to make the exit node the default route for the cluster
     /// If true, the exit node will be the default route for the cluster
     /// default value is false

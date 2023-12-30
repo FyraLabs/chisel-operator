@@ -25,6 +25,10 @@ spec:
                 description: Optional authentication secret name to connect to the control plane
                 nullable: true
                 type: string
+              chisel_image:
+                description: Optional value for the chisel client image used to connect to the chisel server If not provided, jpillora/chisel:latest is used
+                nullable: true
+                type: string
               default_route:
                 default: false
                 description: Optional boolean value for whether to make the exit node the default route for the cluster If true, the exit node will be the default route for the cluster default value is false

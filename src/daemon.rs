@@ -268,6 +268,7 @@ async fn exit_node_from_service(
             external_host: None,
             default_route: true,
             fingerprint: None,
+            chisel_image: None,
         },
         status: None,
     };
