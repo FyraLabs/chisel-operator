@@ -268,3 +268,6 @@ It is recommended you use an Ingress controller to expose your services. This gr
 ## How do I contribute?
 
 Feel free to open a pull request or an issue if you have any suggestions or improvements. We're open to any ideas!
+
+## Legal
+Fyra Labs disclaims all liability related to usage of chisel-operator. Please proxy responsibly. See [LICENSE.md](LICENSE.md) for additional details. Contact abuse@fyralabs.com with complaints.
