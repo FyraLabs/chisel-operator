@@ -13,7 +13,10 @@ use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
+
 const DEFAULT_SIZE: &str = "t2.micro";
+const UBUNTU_AMI_SSM_KEY: &str =
+    "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id";
 
 fn default_size() -> String {
     String::from(DEFAULT_SIZE)
@@ -131,7 +134,7 @@ impl Provisioner for AWSProvisioner {
         let ssm_client = aws_sdk_ssm::Client::new(&aws_api);
         let parameter_response = ssm_client
             .get_parameter()
-            .name("/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id")
+            .name(UBUNTU_AMI_SSM_KEY)
             .send()
             .await?;
         let ami = parameter_response.parameter.unwrap().value.unwrap();

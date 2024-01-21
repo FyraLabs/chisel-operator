@@ -7,11 +7,11 @@ use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
+
 const DROPLET_SIZE: &str = "s-1vcpu-1gb";
 const DROPLET_IMAGE: &str = "ubuntu-23-04-x64";
 
 const TOKEN_KEY: &str = "DIGITALOCEAN_TOKEN";
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct DigitalOceanProvisioner {
@@ -126,7 +126,7 @@ impl Provisioner for DigitalOceanProvisioner {
             ip: droplet_ip.clone(),
             id: Some(droplet.id.to_string()),
             provider: provisioner.clone(),
-            service_binding: None
+            service_binding: None,
         };
 
         Ok(exit_node)
