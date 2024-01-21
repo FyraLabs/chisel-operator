@@ -15,6 +15,8 @@ use k8s_openapi::{
 use kube::{api::ResourceExt, core::ObjectMeta, error::ErrorResponse, Resource};
 use tracing::{debug, info, instrument};
 
+const CHISEL_IMAGE: &str = "jpillora/chisel";
+
 /// The function takes a ServicePort struct and returns a string representation of the port number and
 /// protocol (if specified).
 ///
@@ -215,7 +217,7 @@ pub async fn create_pod_template(
                         .spec
                         .chisel_image
                         .clone()
-                        .unwrap_or_else(|| "jpillora/chisel".to_string()),
+                        .unwrap_or_else(|| CHISEL_IMAGE.to_string()),
                 ),
                 name: "chisel".to_string(),
                 env,
