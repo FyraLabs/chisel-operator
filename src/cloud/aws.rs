@@ -8,11 +8,11 @@ use aws_config::{BehaviorVersion, Region};
 use aws_sdk_ec2::types::{Tag, TagSpecification};
 use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use base64::Engine;
-use color_eyre::eyre::{anyhow, Error};
+use color_eyre::eyre::anyhow;
 use k8s_openapi::api::core::v1::Secret;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 const DEFAULT_SIZE: &str = "t2.micro";
 const UBUNTU_AMI_SSM_KEY: &str =

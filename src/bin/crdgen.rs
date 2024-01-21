@@ -1,12 +1,7 @@
+use chisel_operator::ops;
 use kube::CustomResourceExt;
 use std::fs::File;
 use std::io::prelude::*;
-
-mod cloud;
-mod daemon;
-mod deployment;
-mod error;
-mod ops;
 
 // todo: Make this a cargo xtask, maybe?
 

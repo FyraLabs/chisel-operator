@@ -51,7 +51,7 @@ use crate::ops::{
     EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
-#[allow(dead_code)]
+
 pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
 pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
 
@@ -69,7 +69,6 @@ pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
 // }
 
 // this is actually used to pass clients around
-#[allow(dead_code)]
 pub struct Context {
     pub client: Client,
 }
@@ -130,10 +129,9 @@ async fn check_service_managed(service: &Service) -> bool {
 
 // Let's not use magic values, so we can change this later or if someone wants to fork this for something else
 
-#[allow(dead_code)]
 const OPERATOR_CLASS: &str = "chisel-operator.io/chisel-operator-class";
-#[allow(dead_code)]
 const OPERATOR_MANAGER: &str = "chisel-operator";
+
 #[instrument(skip(ctx))]
 async fn select_exit_node_local(
     ctx: Arc<Context>,

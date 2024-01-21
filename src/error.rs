@@ -1,7 +1,6 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[allow(dead_code)] // all these errors are used
 pub enum ReconcileError {
     #[error("Kube Error: {0}")]
     KubeError(#[from] kube::Error),

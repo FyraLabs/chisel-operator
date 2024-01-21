@@ -10,7 +10,7 @@ use kube::{core::ObjectMeta, Api, CustomResource};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
-#[allow(dead_code)]
+
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
 pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provisioner";
 
@@ -149,7 +149,6 @@ pub enum ExitNodeProvisionerSpec {
 }
 
 impl ExitNodeProvisionerSpec {
-    #[allow(dead_code)] // this one is actually used lol
     pub fn get_inner(self) -> Box<(dyn Provisioner + Send + Sync)> {
         // Can we somehow not have to match on this?
         match self {
@@ -165,7 +164,6 @@ pub trait ProvisionerSecret {
 }
 
 impl ExitNodeProvisioner {
-    #[allow(dead_code)] // this is used in daemon.rs
     pub async fn find_secret(&self) -> Result<Option<Secret>> {
         let secret_name = match &self.spec {
             ExitNodeProvisionerSpec::DigitalOcean(a) => a.auth.clone(),

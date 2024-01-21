@@ -58,7 +58,3 @@ hyper-rustls = { version = "0.24.2", features = ["http2", "webpki-roots", "webpk
 # tonic = { version = "0.8.3" }
 # tracing-opentelemetry = "0.18.0"
 # opentelemetry_api = "0.18.0"
-
-[[bin]]
-name = "crdgen"
-path = "src/crdgen.rs"

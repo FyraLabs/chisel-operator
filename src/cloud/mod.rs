@@ -19,7 +19,6 @@ pub enum CloudProvider {
 }
 
 // This code was actually used, weirdly enough
-#[allow(dead_code)]
 pub const CHISEL_PORT: u16 = 9090;
 
 #[async_trait]

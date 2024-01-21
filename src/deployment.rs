@@ -62,7 +62,6 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// The function `generate_remote_arg` is returning a `String`. The `String`
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
-#[allow(dead_code)]
 pub fn generate_remote_arg(node: &ExitNode) -> String {
     // todo: what about ECDSA keys?
 
@@ -86,7 +85,6 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 ///
 /// a `Result` containing a `Vec` of `String`s. The `Vec` contains arguments for a tunnel, which are
 /// generated based on the input `Service`.
-#[allow(dead_code)]
 pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError> {
     // We can unwrap safely since Service is guaranteed to have a name
     let service_name = svc.metadata.name.clone().unwrap();

@@ -1,5 +1,6 @@
 use std::env;
 
+use chisel_operator::daemon;
 use color_eyre::Result;
 use tracing::info;
 // use opentelemetry::sdk::export::metrics::StdoutExporterBuilder;
@@ -10,11 +11,6 @@ use tracing::info;
 // use tracing::info;
 use tracing_subscriber::{prelude::*, EnvFilter, Registry};
 // Main entrypoint for operator
-mod cloud;
-mod daemon;
-mod deployment;
-mod error;
-mod ops;
 
 // TODO: OpenTelemetry is broken
 
