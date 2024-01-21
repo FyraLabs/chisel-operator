@@ -182,35 +182,10 @@ async fn select_exit_node_local(
             .map(|node| node.clone())
     }
 }
-#[instrument(skip(ctx))]
-async fn select_exit_node_cloud(
-    ctx: Arc<Context>,
-    service: &Service,
-    provisioner: &str,
-) -> Result<ExitNode, ReconcileError> {
-    // logic is: it should check if the annotation is set, if it is not, create a new exit node and provision it
-    // if it is set, then check if exit node exists, if it does, return that exit node, if it doesn't, create a new exit node and return that
-
-    // check if annotation is set
-
-    // if let Some(exit_node_name) = service
-    //     .metadata
-    //     .annotations
-    //     .as_ref()
-    //     .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
-    // {
-    //     let exit_node = find_exit_node_from_label(ctx, exit_node_name).await;
-    //     return exit_node.ok_or(ReconcileError::NoAvailableExitNodes);
-    // }
-
-    // create new exit node here
-    let node = exit_node_from_service(ctx, service);
-    node.await
-}
 
 #[instrument(skip(ctx))]
-/// Generates an ExitNode resource from a Service resource, and creates it
-async fn exit_node_from_service(
+/// Returns the ExitNode resource for a Service resource, either finding an existing one or creating a new one
+async fn exit_node_for_service(
     ctx: Arc<Context>,
     service: &Service,
 ) -> Result<ExitNode, ReconcileError> {
@@ -244,7 +219,10 @@ async fn exit_node_from_service(
         }))
     })?;
 
-    // try to find exit node from name and namespace
+    // try to find exit node from name within the service's namespace, and return if found
+    if let Ok(exit_node) = nodes.get(&exit_node_name).await {
+        return Ok(exit_node);
+    }
 
     let exit_node_tmpl = ExitNode {
         metadata: ObjectMeta {
@@ -273,23 +251,17 @@ async fn exit_node_from_service(
         status: None,
     };
 
-    let exit_node = nodes.get(&exit_node_name).await;
+    let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
-    if let Ok(exit_node) = exit_node {
-        return Ok(exit_node);
-    } else {
-        let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
+    let exit_node = nodes
+        .patch(
+            &exit_node_tmpl.name_any(),
+            &serverside,
+            &Patch::Apply(exit_node_tmpl.clone()),
+        )
+        .await?;
 
-        let exit_node = nodes
-            .patch(
-                &exit_node_tmpl.name_any(),
-                &serverside,
-                &Patch::Apply(exit_node_tmpl.clone()),
-            )
-            .await?;
-
-        Ok(exit_node)
-    }
+    Ok(exit_node)
 }
 // #[instrument(skip(ctx), fields(trace_id))]
 /// Reconcile cluster state
@@ -340,20 +312,13 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         if let Some(node) = existing_node {
             node.clone()
         } else if check_service_managed(&obj).await {
-            let provisioner = obj
-                .metadata
-                .annotations
-                .as_ref()
-                .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
-                .unwrap();
-
             // Remove attached exit node if the service was managed by a cloud provider and when it is removed
-            let mut exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
+            let mut exit_node = exit_node_for_service(ctx.clone(), &obj).await?;
 
             while exit_node.status.is_none() {
                 warn!("Waiting for exit node to be provisioned");
                 tokio::time::sleep(Duration::from_secs(5)).await;
-                exit_node = select_exit_node_cloud(ctx.clone(), &obj, provisioner).await?;
+                exit_node = exit_node_for_service(ctx.clone(), &obj).await?;
             }
 
             exit_node
@@ -368,26 +333,9 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     let obj_ip = obj.clone().status;
 
-    debug!(?exit_node_ip, ?obj_ip, "Exit node IP debug");
+    debug!(?exit_node_ip, ?obj_ip, "Exit node IP");
 
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
-
-    // let mut svc = obj.clone();
-
-    // debug!(?exit_node_ip, "Exit node IP");
-
-    // if svc
-    //     .status
-    //     .as_ref()
-    //     .and_then(|status| status.load_balancer.as_ref())
-    //     .and_then(|lb| lb.ingress.as_ref())
-    //     .and_then(|ingress| ingress.first())
-    //     .and_then(|ingress| ingress.ip.as_ref())
-    //     == Some(&exit_node_ip)
-    // {
-    //     info!("Load balancer IP is already set, not patching");
-    //     return Ok(Action::requeue(Duration::from_secs(3600)));
-    // }
 
     svc.status = Some(ServiceStatus {
         load_balancer: Some(LoadBalancerStatus {
@@ -512,25 +460,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             status: "Failure".to_string(),
         }))
     })
-
-    // let node_data = serde_json::json!({
-    //     "status": {
-    //         "service_binding": ServiceBinding {
-    //             namespace: obj.namespace().unwrap(),
-    //             name: obj.name_any()
-    //         }
-    //     }
-    // });
-
-    // Ok(Action::requeue(Duration::from_secs(3600)))
-
-    // if obj_ip == Some(exit_node_ip.as_str())
-    // {
-    //     info!("status is the same, not patching");
-
-    //     return Ok(Action::requeue(Duration::from_secs(3600)));
-    // } else {
-    // }
 }
 
 #[instrument(skip(_object, err, _ctx))]

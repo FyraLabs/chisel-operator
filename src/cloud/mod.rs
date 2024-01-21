@@ -18,22 +18,6 @@ pub enum CloudProvider {
     AWS,
 }
 
-// impl CloudProvider {
-//     #[allow(dead_code)]
-//     pub fn from_crd(crd: ExitNodeProvisioner) -> color_eyre::Result<Self> {
-//         // this thing is an enum so we can just match on it?
-
-//         // todo: single source of truth for this maybe
-//         // consider removing this CloudProvider enum and just using the ExitNodeProvisionerSpec enum
-//         // and then we can just match on that
-
-//         match crd.spec {
-//             ExitNodeProvisionerSpec::DigitalOcean(_) => Ok(CloudProvider::DigitalOcean),
-//             ExitNodeProvisionerSpec::Linode(_) => Ok(CloudProvider::Linode),
-//             ExitNodeProvisionerSpec::AWS(_) => Ok(CloudProvider::AWS),
-//         }
-//     }
-// }
 // This code was actually used, weirdly enough
 #[allow(dead_code)]
 pub const CHISEL_PORT: u16 = 9090;
