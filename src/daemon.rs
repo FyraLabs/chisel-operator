@@ -149,8 +149,6 @@ async fn select_exit_node_local(
             .ok_or(ReconcileError::NoAvailableExitNodes)
     } else {
         // otherwise, use the first available exit node
-        // BUG: This will always return the first exit node, even if it is not ready
-        // todo: We would want to add a status for every exit node and only bind one service to one exit node
         // (one to one mapping)
         let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
         let node_list: kube::core::ObjectList<ExitNode> =
@@ -159,20 +157,21 @@ async fn select_exit_node_local(
             .items
             .into_iter()
             .filter(|node| {
-                // Is the ExitNode not cloud provisioned
-                (!node
+                let is_cloud_provisioned = node
                     .metadata
                     .annotations
                     .as_ref()
                     .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
-                    .unwrap_or(false)
-                    // OR is status set
-                    || node.status.is_some())
-                    && !node
-                        .status
-                        .as_ref()
-                        .map(|s| s.service_binding.is_some())
-                        .unwrap_or(false)
+                    .unwrap_or(false);
+
+                let has_service_binding = node
+                    .status
+                    .as_ref()
+                    .map(|status| status.service_binding.is_some())
+                    .unwrap_or(false);
+
+                // Is the ExitNode not cloud provisioned or is the status set? And (in both cases) does it not have a service binding?
+                (!is_cloud_provisioned || node.status.is_some()) && !has_service_binding
             })
             .collect::<Vec<ExitNode>>()
             .first()
