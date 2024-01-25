@@ -149,6 +149,8 @@ kind: Service
 metadata:
   name: whoami
   annotations:
+    # If the provisioner is in another namespace, you need to specify that
+    # for example, with a namespace of example, the value would be example/digitalocean
     chisel-operator.io/exit-node-provisioner: "digitalocean"
 spec:
   selector:
@@ -167,7 +169,7 @@ This is useful if you want to just allocate an entire exit node for a single ser
 
 You can also manually allocate exit nodes, but still let the operator manage the Chisel client deployment. This is useful if you want to allocate a single exit node for multiple services, in case you're on a budget and don't want to pay for multiple exit nodes for each service.
 
-To do this, create an `ExitNode` resource with the annotation `chisel-operator.io/exit-node-provisioner` set to the name of the `ExitNodeProvisioner` resource.
+To do this, create an `ExitNode` resource with the annotation `chisel-operator.io/exit-node-provisioner` set to the name (and namespace if the provisioner is in a different namespace) of the `ExitNodeProvisioner` resource.
 
 ```yaml
 apiVersion: chisel-operator.io/v1
@@ -176,6 +178,8 @@ metadata:
   name: my-exit-node
   namespace: default
   annotations:
+    # If the provisioner is in another namespace, you need to specify that
+    # for example, with a namespace of example, the value would be example/digitalocean
     chisel-operator.io/exit-node-provisioner: "digitalocean"
 spec:
   # IP address of exit node
@@ -270,4 +274,5 @@ It is recommended you use an Ingress controller to expose your services. This gr
 Feel free to open a pull request or an issue if you have any suggestions or improvements. We're open to any ideas!
 
 ## Legal
+
 Fyra Labs disclaims all liability related to usage of chisel-operator. Please proxy responsibly. See [LICENSE.md](LICENSE.md) for additional details. Contact abuse@fyralabs.com with complaints.

@@ -5,6 +5,7 @@ use crate::cloud::{
     Provisioner,
 };
 use color_eyre::Result;
+use itertools::Itertools;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{core::ObjectMeta, Api, CustomResource};
 use schemars::JsonSchema;
@@ -13,6 +14,17 @@ use tracing::debug;
 
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
 pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provisioner";
+
+pub fn parse_provisioner_label_value<'a>(
+    default_namespace: &'a str,
+    value: &'a str,
+) -> (&'a str, &'a str) {
+    if let Some(pair) = value.split('/').collect_tuple() {
+        pair
+    } else {
+        (default_namespace, value)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(

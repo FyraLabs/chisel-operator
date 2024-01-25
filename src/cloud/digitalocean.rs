@@ -1,9 +1,12 @@
 use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
-use crate::ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
+use crate::ops::{
+    parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL,
+};
 use async_trait::async_trait;
 use color_eyre::eyre::{anyhow, Error};
 use digitalocean_rs::DigitalOceanApi;
 use k8s_openapi::api::core::v1::Secret;
+use kube::ResourceExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
@@ -81,9 +84,13 @@ impl Provisioner for DigitalOceanProvisioner {
                 )
             })?;
 
+        let current_namespace = exit_node.namespace().unwrap();
+        let (_provisioner_namespace, provsioner_name) =
+            parse_provisioner_label_value(&current_namespace, provisioner);
+
         let name = format!(
             "{}-{}",
-            provisioner,
+            provsioner_name,
             exit_node.metadata.name.as_ref().unwrap()
         );
 

@@ -1,9 +1,12 @@
 use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
-use crate::ops::{ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL};
+use crate::ops::{
+    parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL,
+};
 use async_trait::async_trait;
 use base64::Engine;
 use color_eyre::eyre::{anyhow, Error};
 use k8s_openapi::api::core::v1::Secret;
+use kube::ResourceExt;
 use linode_rs::LinodeApi;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -70,9 +73,13 @@ impl Provisioner for LinodeProvisioner {
             .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
             .unwrap();
 
-        let name = format!(
+        let current_namespace = exit_node.namespace().unwrap();
+        let (_provisioner_namespace, provsioner_name) =
+            parse_provisioner_label_value(&current_namespace, provisioner);
+
+        let name: String = format!(
             "{}-{}",
-            provisioner,
+            provsioner_name,
             exit_node.metadata.name.as_ref().unwrap()
         );
 
@@ -107,7 +114,7 @@ impl Provisioner for LinodeProvisioner {
             name: instance.label,
             provider: provisioner.to_string(),
             id: Some(instance.id.to_string()),
-            service_binding: None
+            service_binding: None,
         };
 
         Ok(status)

@@ -46,9 +46,12 @@ use std::{collections::BTreeMap, sync::Arc};
 use std::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
 
-use crate::ops::{
-    ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, ServiceBinding,
-    EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
+use crate::{
+    cloud::Provisioner,
+    ops::{
+        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
+        ServiceBinding, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
+    },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
 
@@ -85,24 +88,29 @@ async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<Exi
             .unwrap_or(false)
     })
 }
+
 #[instrument(skip(ctx))]
 async fn find_exit_node_provisioner_from_label(
     ctx: Arc<Context>,
+    default_namespace: &str,
     query: &str,
 ) -> Option<ExitNodeProvisioner> {
     let span = tracing::debug_span!("find_exit_node_provisioner_from_label", ?query);
     let _enter = span.enter();
-    let nodes: Api<ExitNodeProvisioner> = Api::all(ctx.client.clone());
+
+    let (namespace, name) = parse_provisioner_label_value(default_namespace, query);
+
+    let nodes: Api<ExitNodeProvisioner> = Api::namespaced(ctx.client.clone(), namespace);
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
     info!(node_list = ?node_list, "node list");
     let result = node_list.items.into_iter().find(|node| {
         node.metadata
             .name
             .as_ref()
-            .map(|name| name == query)
+            .map(|n| n == name)
             .unwrap_or(false)
     });
-    debug!(query = ?query, ?result, "Query result");
+    debug!(name = ?name, ?result, "Query result");
 
     result
 }
@@ -161,7 +169,9 @@ async fn select_exit_node_local(
                     .metadata
                     .annotations
                     .as_ref()
-                    .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
+                    .map(|annotations: &BTreeMap<String, String>| {
+                        annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL)
+                    })
                     .unwrap_or(false);
 
                 let has_service_binding = node
@@ -536,12 +546,16 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
                 let old_provider = status.provider.clone();
 
-                let old_provisioner =
-                    find_exit_node_provisioner_from_label(ctx.clone(), &old_provider)
-                        .await
-                        .ok_or(ReconcileError::CloudProvisionerNotFound)?;
+                let old_provisioner = find_exit_node_provisioner_from_label(
+                    ctx.clone(),
+                    &obj.namespace().unwrap(),
+                    &old_provider,
+                )
+                .await
+                .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
-                let old_provisioner_api = old_provisioner.clone().spec.get_inner();
+                let old_provisioner_api: Box<dyn Provisioner + Send + Sync> =
+                    old_provisioner.clone().spec.get_inner();
 
                 let secret = old_provisioner
                     .find_secret()
@@ -575,9 +589,13 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             }
         }
 
-        let provisioner = find_exit_node_provisioner_from_label(ctx.clone(), provisioner)
-            .await
-            .ok_or(ReconcileError::CloudProvisionerNotFound)?;
+        let provisioner = find_exit_node_provisioner_from_label(
+            ctx.clone(),
+            &obj.namespace().unwrap(),
+            provisioner,
+        )
+        .await
+        .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
         let provisioner_api = provisioner.clone().spec.get_inner();
 
