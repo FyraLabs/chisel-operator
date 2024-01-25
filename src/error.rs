@@ -10,4 +10,12 @@ pub enum ReconcileError {
 
     #[error("There are no ports set on this LoadBalancer")]
     NoPortsSet,
+
+    #[error("The provided cloud provisioner was not found in the cluster")]
+    CloudProvisionerNotFound,
+    #[error("The secret keys for the cloud provisioner were not found in the cluster")]
+    CloudProvisionerSecretNotFound,
+
+    #[error("The operator has encountered an unknown error, this is most likely a bug: {0}")]
+    UnknownError(#[from] color_eyre::Report),
 }

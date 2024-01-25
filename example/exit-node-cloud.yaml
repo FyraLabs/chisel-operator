@@ -1,0 +1,15 @@
+apiVersion: chisel-operator.io/v1
+kind: ExitNode
+metadata:
+  name: my-exit-node
+  namespace: default
+  annotations:
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
+spec:
+  # IP address of exit node
+  host: ""
+  # Control plane socket port
+  port: 9090
+  # Name of the secret containing the auth key
+  # Create a secret with a key named "auth" and put the value there
+  # auth: SECRET-NAME

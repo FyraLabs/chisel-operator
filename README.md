@@ -1,30 +1,63 @@
-# Chisel Kubernetes Operator
+# Chisel Kubernetes Operator ⚒️
+
+Use a VPS (or any other machine) as a reverse proxy for your Kubernetes cluster, without paying the extra 25$ a month!
 
 This is a Kubernetes operator for Chisel. It allows you to use Chisel as a LoadBalancer provider for your Kubernetes cluster, similar to [inlets-operator](https://github.com/inlets/inlets-operator)
+
+## Features
+
+- Automatic provisioning of exit nodes on cloud providers
+- Free and open-source
+- TCP and UDP support
+- **INFINITE** tunnels! (You can create as many tunnels as you want, as long as you have enough bandwidth)
+- Use any machine as an exit node
+- Hybrid cloud support (You can use multiple cloud providers at once)
 
 ## TODO
 
 - [x] Authentication
 - [x] Multiple tunnel services per exit node (so you don't have to pay for multiple VMs)
-- [ ] Extra configuration options
+- [x] Extra configuration options
 - [x] TCP/UDP support
 - [ ] Multiple IPs per exit node
-- [ ] Multiple exit nodes support
-- [ ] Cloud provisioner (like inletsctl/inlets-operator)
+- [x] Multiple exit nodes support
+- [x] Cloud provisioner (like inletsctl/inlets-operator)
 
 ## Why?
 
-This project was started due to my frustration with inlets' business model.
+### The issue
 
-inlets used to be an open-source reverse-proxy-over-WebSockets solution that lets you expose your local service to an exit node in the cloud. It was a great solution for people who do not have a public IP address, or simply want to expose their service to the internet without having to deal with port-forwarding and NAT.
+If you want to expose a service to the internet, you need a public IP address.
 
-However, inlets has recently switched to a closed-source model, where the only way to use it is to pay for an inlets PRO license. This is a huge turn-off for me, and many others, as it is no longer a viable solution for hobbyists and small businesses on a budget.
+However, if you're running a cluster inside a NATed network (like a home network), you can't just expose your service to the internet. You need to port forward your service to the internet. This might be fine, but then there's another problem:
 
-I do not want to pay a 25$ monthly fee on top of the reverse proxy VPS that I am already paying for, so I decided to make my own solution.
+The world's running out of IPv4 addresses. This means that ISPs are starting to charge extra for public IP addresses, and most home networks are locked behind a CGNAT, and requires you to pay extra for a public IP address.
 
-This project will never have a profit incentive, and will always be open-source. I simply want to make a solution that is FOSS, and share it with the world because I believe that it will be useful to many people.
+You could just use an IPv6 address, but most ISPs don't support IPv6 yet, and K8s with IPv6 is kind of a pain to set up.
 
-I myself work at a financially struggling startup, and also live in a country where the average salary is 500$ a month. I understand the struggle of having to pay for expensive software, and I want to make a solution that is free for everyone to use. Having to rent out a VPS for 5-10$ a month is already expensive enough, and I don't want to have to pay an additional 25$ a month just to use a reverse proxy so I can expose my pirated content to the Internet.
+> Disclaimer: We are not responsible for any problems arising from abuse of this software. Please proxy responsibly.
+> See [LICENSE.md](LICENSE.md) for more details.
+
+### The other issue
+
+You might say, "What about Inlets?" Inlets is a great solution, but it comes with a couple caveats:
+
+- You need to pay for an inlets PRO license to even use it (It's a proprietary solution)
+- You still need to pay for the exit node on top of the inlets PRO license
+
+### The solution
+
+Introducing the Fyra Labs Chisel Operator! This operator provides a replacement for inlets, but free and open-source!
+
+This operator makes use of the [Chisel] tunnel to expose your services to the internet through SSH. And you can use any machine as an exit node!
+
+[Chisel]: https://github.com/jpillora/chisel
+
+Since Chisel routes traffic through SSH, all traffic is encrypted and secure. The Chisel Operator also supports automatic provisioning of exit nodes on cloud providers, so you get basically the same functionality, but free!
+
+---
+
+While this code is free and open-source, we still accept donations! If you really like this project, please consider donating to us on [GitHub Sponsors](https://github.com/sponsors/FyraLabs) :3
 
 ## How does it work?
 
@@ -49,40 +82,142 @@ This operator works similarly to inlets-operator. It watches for `LoadBalancer` 
 - [inlets](https://inlets.dev/) - Bite the bullet and pay for an inlets PRO license. inlets-pro allows you to automatically provision exit nodes on cloud providers, but it is a proprietary solution and requires you to pay a monthly fee.
 - [rathole](https://github.com/rapiz1/rathole) - Similar to frp, written in Rust.
 
-
 ### VPNs and overlay networks
 
 - [Tailscale](https://tailscale.com/) - VPN solution that allows you to connect your devices in one big overlay network. Also has Funnel, a reverse proxy solution that allows you to expose your local service to the internet. Self-hostable control plane is available, but default is to use Tailscale's hosted control plane.
 - ZeroTier - Similar to Tailscale, Under BSD license, Can connect to multiple networks at once.
----
-Find more alternatives [here](https://github.com/anderspitman/awesome-tunneling)
 
+---
+
+Find more alternatives [here](https://github.com/anderspitman/awesome-tunneling)
 
 ## How do I use it?
 
-Currently, you will need to manually provision a Chisel server on your own exit node.
+There are two ways to use this operator:
+
+- Manually provision the exit (reverse proxy) node, and let the operator manage the Chisel client deployment
+- Let the operator provision exit nodes on a cloud provider of your choice. The operator currently supports the following cloud providers:
+  - DigitalOcean
+  - Linode (Currently only on regions with Metadata services)
+  - AWS
 
 ## Cluster Installation
 
 Install using the Kustomize config:
+
 ```bash
 kubectl apply -k https://github.com/FyraLabs/chisel-operator
 ```
 
-### Deploying the operator
+A Helm chart will be available soon.
 
-First, you will need a VPS with a public IP address that will act as your exit node. You can use any cloud provider you want. Here are some suggestions:
+## Usage
 
-- [DigitalOcean](https://www.digitalocean.com/)
-- [Vultr](https://www.vultr.com/)
-- [Linode](https://www.linode.com/)
-- [Google Cloud](https://cloud.google.com/)
-- [Hetzner](https://www.hetzner.com/)
-- [Contabo](https://contabo.com/)
+### Operator-managed exit nodes
 
-After purchasing a VPS, you will need to provision Chisel on it.
+This operator can automatically provision exit nodes on cloud providers.
 
-### Provisioning Chisel
+To use this feature, you must first create a `ExitNodeProvisioner` resource. This resource contains the configuration for the cloud provider, and the operator will use this resource to provision exit nodes.
+
+```yaml
+apiVersion: chisel-operator.io/v1
+kind: ExitNodeProvisioner
+metadata:
+  name: digitalocean
+  namespace: default
+spec:
+  # Cloud provider configuration, must be one per resource
+  # Valid values are DigitalOcean, Linode, AWS
+  DigitalOcean:
+    # Reference to a secret containing the DigitalOcean API token
+    # with key `DIGITALOCEAN_TOKEN`
+    # Must be in the same namespace as the ExitNodeProvisioner
+    auth: digitalocean
+    region: sgp1
+```
+
+Now, you can go with one of the two routes:
+
+#### Automatic provisioning per service
+
+Chisel Operator can automatically allocate cloud exit nodes for services,
+if you set an annotation on a `LoadBalancer` service.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  annotations:
+    # If the provisioner is in another namespace, you need to specify that
+    # for example, with a namespace of example, the value would be example/digitalocean
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
+spec:
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+```
+
+This will create a new `ExitNode` resource named after the service, and the operator will automatically allocate an exit node for that service.
+
+This is useful if you want to just allocate an entire exit node for a single service.
+
+#### Manually-allocated, but operator-managed exit nodes
+
+You can also manually allocate exit nodes, but still let the operator manage the Chisel client deployment. This is useful if you want to allocate a single exit node for multiple services, in case you're on a budget and don't want to pay for multiple exit nodes for each service.
+
+To do this, create an `ExitNode` resource with the annotation `chisel-operator.io/exit-node-provisioner` set to the name (and namespace if the provisioner is in a different namespace) of the `ExitNodeProvisioner` resource.
+
+```yaml
+apiVersion: chisel-operator.io/v1
+kind: ExitNode
+metadata:
+  name: my-exit-node
+  namespace: default
+  annotations:
+    # If the provisioner is in another namespace, you need to specify that
+    # for example, with a namespace of example, the value would be example/digitalocean
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
+spec:
+  # IP address of exit node
+  # In this case, we will leave this as a blank string, and let the operator allocate an IP address for us
+  host: ""
+  # Control plane socket port
+  port: 9090
+  # Name of the secret containing the auth key
+  # This is not required, but recommended
+  # If not set, the operator will automatically generate a secret for you
+  # auth: cloud-test-auth
+```
+
+Now, to use this exit node, you can create a `LoadBalancer` service with the annotation `chisel-operator.io/exit-node-name` set to the name of the `ExitNode` resource.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  annotations:
+    chisel-operator.io/exit-node-name: "cloud-test"
+spec:
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+```
+
+> NOTE: You can also use this for manually-provisioned exit nodes
+
+> NOTE: If you do not specify the annotation, the operator will allocate the first available exit node for you.
+
+### Provisioning Chisel manually
+
+> NOTE: You can skip this step if you're using the cloud provisioner.
 
 To install Chisel, install the Chisel binary on the machine using this script:
 
@@ -116,58 +251,13 @@ EnvironmentFile=-/etc/sysconfig/chisel
 
 For security purposes, you should create a `.env` file at `/etc/sysconfig/chisel` (literally) with the following contents:
 
-```env
+```bash
 # This is the root credentials for the Chisel server. You can change this to whatever you want. Just make sure to keep it a secret.
 # You can also use the `--authfile` argument in the ExecStart command instead of this, for a custom ACL file (in JSON).
 AUTH=user:password
 ```
 
 Then run `systemctl daemon-reload` and `systemctl enable --now chisel.service` to enable and start the service.
-
-### Deploying the operator
-
-**NOTE:** This operator is currently in development, breaking changes may occur at any time. It's not ready for production use yet.
-
-To install the operator, deploy the kustomization config from this repository:
-
-```bash
-kubectl apply -k https://github.com/FyraLabs/chisel-operator
-```
-
-### Setting up and usage
-
-Create an `ExitNode` resource with the information gained from the previous steps:
-
-```yaml
-apiVersion: chisel-operator.io/v1
-kind: ExitNode
-metadata:
-  name: my-reverse-proxy
-spec:
-  host: 192.168.0.1 # Bring your own IP
-  port: 9090 # The port you set in the service
-  # securing the connection is optional, but recommended
-  # auth: # The name of a secret containing username and password keys
-```
-
-To use this operator, create a `LoadBalancer` service with no `spec.loadBalancerClass` field or with `spec.loadBalancerClass: "chisel-operator.io/chisel-operator-class"`. The operator will then deploy a Chisel client for that service and expose it on the exit node's IP address. The operator will then manage the service's external IPs and status, and you should be able to use the service as if it was any other LoadBalancer service.
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: my-service
-spec:
-  type: LoadBalancer
-  ports:
-    - port: 80
-      targetPort: 8080
-  selector:
-    app: my-app
-  # loadBalancerClass: chisel-operator.io/chisel-operator-class # Optional, if you're using multiple LoadBalancer operators
-```
-
-MORE INSTRUCTIONS COMING SOON
 
 ## Best Practices
 
@@ -177,12 +267,12 @@ Currently, you should use the public IP address of your exit node as the `host` 
 
 ### Exposing services
 
-It is recommended you use an Ingress controller to expose your services. This greatly simplifies the process for exposing other services, as you only need to expose the Ingress controller's HTTP(S) ports. 
-
+It is recommended you use an Ingress controller to expose your services. This greatly simplifies the process for exposing other services, as you only need to expose the Ingress controller's HTTP(S) ports.
 
 ## How do I contribute?
 
-Feel free to open a pull request or an issue if you have any suggestions or improvements. I'm open to any ideas!
+Feel free to open a pull request or an issue if you have any suggestions or improvements. We're open to any ideas!
 
 ## Legal
+
 Fyra Labs disclaims all liability related to usage of chisel-operator. Please proxy responsibly. See [LICENSE.md](LICENSE.md) for additional details. Contact abuse@fyralabs.com with complaints.
