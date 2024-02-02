@@ -3,7 +3,7 @@ title: ExitNode
 description: A reference page about the ExitNode resource.
 ---
 
-An ExitNode is a resource representing a Chisel exit node that the operator can use for tunneling.
+An `ExitNode` is a resource representing a Chisel exit node that the operator can use for tunneling.
 It contains the configuration required to connect to the remote Chisel server.
 
 ## Fields

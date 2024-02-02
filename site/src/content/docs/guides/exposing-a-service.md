@@ -3,7 +3,7 @@ title: Exposing a Service
 description: A guide of how to get started with Chisel Operator.
 ---
 
-Once you have a ExitNode or ExitNodeProvisioner set up in your cluster, you're ready to begin exposing services!
+Once you have a `ExitNode` or `ExitNodeProvisioner` set up in your cluster, you're ready to begin exposing services!
 
 Here's an example service:
 
@@ -27,8 +27,8 @@ As you can see, the type of this service is `LoadBalancer`, which is required fo
 Note that Chisel Operator acts on all LoadBalancer services in the cluster by default.
 
 Additionally, there's also a commented out annotation, `chisel-operator.io/exit-node-name`.
-By default, Chisel Operator will automatically select a random, unused ExitNode on the cluster if a cloud provisioner or exit node annotation is not set.
-If you'd like to force the service to a particular exit node, you can uncomment out the annotation, setting it to the name of the ExitNode to target.
+By default, Chisel Operator will automatically select a random, unused `ExitNode` on the cluster if a cloud provisioner or exit node annotation is not set.
+If you'd like to force the service to a particular exit node, you can uncomment out the annotation, setting it to the name of the `ExitNode` to target.
 
 <!-- TODO: cross namespace -->
 
