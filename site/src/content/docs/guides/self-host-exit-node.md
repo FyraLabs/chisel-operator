@@ -3,7 +3,7 @@ title: Self-hosting an Exit Node
 description: A guide of how you can self-host your own Chisel exit node.
 ---
 
-First, you'll need a machine where you can run Chisel.
+First, you'll need a machine where you can run [Chisel](https://github.com/jpillora/chisel), the software that Chisel Operator uses to tunnel to your server.
 We assume that you're running a Linux distribution with systemd.
 
 To install Chisel, you can use your distribution's Chisel package or the official install script.
@@ -47,4 +47,35 @@ AUTH=user:password
 
 Then run `systemctl daemon-reload` and `systemctl enable --now chisel.service` to enable and start the service. The Chisel server will be accessible on all addresses on port `9000`, although, you may need to configure your firewall settings to allow this.
 
-Congratulations, that wasn't too hard, was it?
+Now, we can finally let Chisel Operator know about our exit node, by creating a corresponding `ExitNode` resource:
+
+```yaml
+apiVersion: chisel-operator.io/v1
+kind: ExitNode
+metadata:
+  name: my-exit-node
+  namespace: default
+spec:
+  # IP address of exit node
+  host: "192.168.1.1" # Set to the public IP of your exit node!
+  # Control plane socket port
+  port: 9090
+  # Name of the secret containing the auth key
+  # Create a secret with a key named "auth" and put the value there
+  auth: my-exit-node-secret
+```
+
+We'll also need to create a secret with our credentials:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-exit-node-secret
+  namespace: default
+type: Opaque
+stringData:
+  auth: user:password
+```
+
+And congratulations, you're ready to start tunneling services! That wasn't too hard, was it?
