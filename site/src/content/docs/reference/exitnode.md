@@ -24,7 +24,7 @@ It contains the configuration required to connect to the remote Chisel server.
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | chisel-operator.io/exit-node-provisioner | The exit node provisioner to use to provision this node. Example: "default/my-exit-node-provisioner". Most users won't need to use this unless they want to pre-provision nodes. |
 
-## Example
+## Examples
 
 ```yaml
 apiVersion: chisel-operator.io/v1
@@ -35,6 +35,24 @@ metadata:
 spec:
   # IP address of exit node
   host: "192.168.1.1"
+  # Control plane socket port
+  port: 9090
+  # Name of the secret containing the auth key
+  # Create a secret with a key named "auth" and put the value there
+  # auth: SECRET-NAME
+```
+
+```yaml
+apiVersion: chisel-operator.io/v1
+kind: ExitNode
+metadata:
+  name: my-exit-node
+  namespace: default
+  annotations:
+    chisel-operator.io/exit-node-provisioner: "digitalocean"
+spec:
+  # IP address of exit node
+  host: ""
   # Control plane socket port
   port: 9090
   # Name of the secret containing the auth key
