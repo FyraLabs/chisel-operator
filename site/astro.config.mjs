@@ -3,9 +3,13 @@ import starlight from "@astrojs/starlight";
 
 // https://astro.build/config
 export default defineConfig({
+  site: "https://chisel.fyralabs.com",
   integrations: [
     starlight({
       title: "Chisel Operator",
+      editLink: {
+        baseUrl: "https://github.com/FyraLabs/chisel-operator/edit/main/site/",
+      },
       social: {
         github: "https://github.com/fyralabs/chisel-operator",
         discord: "https://discord.com/invite/5fdPuxTg5Q",
