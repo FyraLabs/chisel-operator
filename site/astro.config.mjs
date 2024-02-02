@@ -26,6 +26,10 @@ export default defineConfig({
               label: "Self Hosting an Exit Node",
               link: "/guides/self-host-exit-node/",
             },
+            {
+              label: "Using Cloud Provisioning",
+              link: "/guides/using-cloud-provisioning/",
+            },
           ],
         },
         {
