@@ -41,7 +41,7 @@ export default defineConfig({
           autogenerate: { directory: "reference" },
         },
         {
-          label: "Cloud Provisioning",
+          label: "Cloud Provisioning Reference",
           autogenerate: { directory: "cloud" },
         },
       ],

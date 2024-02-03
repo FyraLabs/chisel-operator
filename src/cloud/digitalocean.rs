@@ -20,17 +20,20 @@ const TOKEN_KEY: &str = "DIGITALOCEAN_TOKEN";
 pub struct DigitalOceanProvisioner {
     /// Region ID of the DigitalOcean datacenter to provision the exit node in
     /// If empty, DigitalOcean will randomly select a region for you, which might not be what you want
+    /// See https://slugs.do-api.dev/
     #[serde(default)]
     pub region: String,
-    /// Reference to a secret containing the DigitalOcean API token, under the token key
+    /// Reference to a secret containing the DigitalOcean API token, under the `DIGITALOCEAN_TOKEN` secret key
     pub auth: String,
     /// SSH key fingerprints to add to the exit node
     #[serde(default)]
     pub ssh_fingerprints: Vec<String>,
-
+    /// Size for the DigitalOcean droplet
+    /// See https://slugs.do-api.dev/
     #[serde(default = "default_size")]
     pub size: String,
 }
+
 fn default_size() -> String {
     String::from(DROPLET_SIZE)
 }

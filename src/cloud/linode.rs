@@ -21,11 +21,13 @@ fn default_size() -> String {
 }
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct LinodeProvisioner {
-    /// Name of the secret containing the Linode API token
+    /// Name of the secret containing the Linode API token, under the `LINODE_TOKEN` secret key
     pub auth: String,
     /// Region ID of the Linode datacenter to provision the exit node in
+    /// See https://api.linode.com/v4/regions
     pub region: String,
     /// Size for the Linode instance
+    /// See https://api.linode.com/v4/linode/
     #[serde(default = "default_size")]
     pub size: String,
 }
