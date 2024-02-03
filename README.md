@@ -4,6 +4,8 @@ Use a VPS (or any other machine) as a reverse proxy for your Kubernetes cluster,
 
 This is a Kubernetes operator for Chisel. It allows you to use Chisel as a LoadBalancer provider for your Kubernetes cluster, similar to [inlets-operator](https://github.com/inlets/inlets-operator)
 
+View the documentation: https://chisel.fyralabs.com
+
 ## Features
 
 - Automatic provisioning of exit nodes on cloud providers
