@@ -12,7 +12,7 @@ description: A guide of how to install Chisel Operator.
 | security_group | string?              | Security group name to use for the exit node, uses the default security group if not specified                                                            |
 | size           | string? = "t2.micro" | Size for the EC2 instance. See https://aws.amazon.com/ec2/instance-types/                                                                                 |
 
-## Example
+## Examples
 
 ```yaml
 apiVersion: chisel-operator.io/v1
@@ -24,4 +24,14 @@ spec:
   AWS:
     auth: aws-auth
     region: us-east-1
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aws-auth
+  namespace: default
+type: Opaque
+stringData:
+  access_key_id: xxxxx
+  secret_access_key: xxxxx
 ```

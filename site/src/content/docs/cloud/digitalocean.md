@@ -12,7 +12,7 @@ description: A guide of how to install Chisel Operator.
 | size             | string? = "s-1vcpu-1gb" | Size for the DigitalOcean droplet. See https://slugs.do-api.dev/                                                                                                                                      |
 | ssh_fingerprints | string[]? = []          | SSH key fingerprints to add to the exit node                                                                                                                                                          |
 
-## Example
+## Examples
 
 ```yaml
 apiVersion: chisel-operator.io/v1
@@ -24,4 +24,13 @@ spec:
   DigitalOcean:
     auth: digitalocean-auth
     region: nyc2
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: digitalocean-auth
+  namespace: default
+type: Opaque
+stringData:
+  DIGITALOCEAN_TOKEN: xxxxx
 ```
