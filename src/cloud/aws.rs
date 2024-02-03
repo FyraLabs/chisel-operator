@@ -25,13 +25,15 @@ fn default_size() -> String {
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct AWSProvisioner {
-    /// Region ID for the AWS region to provision the exit node in
-    pub region: String,
-    /// Reference to a secret containing the AWS access key ID and secret access key, under the access_key_id and secret_access_key keys
+    /// Reference to a secret containing the AWS access key ID and secret access key, under the `access_key_id` and `secret_access_key` secret keys
     pub auth: String,
+    /// Region ID for the AWS region to provision the exit node in
+    /// See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html
+    pub region: String,
     /// Security group name to use for the exit node, uses the default security group if not specified
     pub security_group: Option<String>,
     /// Size for the EC2 instance
+    /// See https://aws.amazon.com/ec2/instance-types/
     #[serde(default = "default_size")]
     pub size: String,
 }

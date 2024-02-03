@@ -1,0 +1,39 @@
+---
+title: Chisel Operator
+description: The easiest way to tunnel any Kubernetes cluster to the internet.
+template: splash
+hero:
+  tagline: The easiest way to tunnel any Kubernetes cluster to the internet.
+  # image:
+  #   file: ../../assets/houston.webp
+  actions:
+    - text: Get Started
+      link: /guides/installation
+      icon: right-arrow
+      variant: primary
+    - text: Join our community
+      link: https://discord.com/invite/5fdPuxTg5Q
+      icon: external
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+{/* ## Next steps */}
+
+<CardGrid stagger>
+  <Card title="Cloud Integration" icon="bars">
+    Chisel Operator integrates with your favorite cloud provider to
+    automatically create and manage tunnels.
+  </Card>
+  <Card title="Open Source" icon="rocket">
+    Chisel Operator is proudly libre and open source software licensed under the
+    GPLv3.
+  </Card>
+  <Card title="Automated" icon="setting">
+    Once the initial setup is complete, Chisel Operator handles the rest.
+  </Card>
+  <Card title="Works Anywhere" icon="random">
+    Whether you're behind CGNAT or an enterprise network, Chisel Operator works
+    in any enviroment.
+  </Card>
+</CardGrid>
