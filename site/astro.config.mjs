@@ -17,6 +17,16 @@ export default defineConfig({
         twitter: "https://twitter.com/teamfyralabs",
         mastodon: "https://fedi.fyralabs.com/@hq",
       },
+      head: [
+        {
+          tag: "script",
+          attrs: {
+            src: "https://anyawytics.fyralabs.com/js/script.js",
+            "data-domain": "chisel.fyralabs.com",
+            defer: true,
+          },
+        },
+      ],
       sidebar: [
         {
           label: "Guides",
