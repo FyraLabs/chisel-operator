@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 const DROPLET_SIZE: &str = "s-1vcpu-1gb";
-const DROPLET_IMAGE: &str = "ubuntu-23-04-x64";
+const DROPLET_IMAGE: &str = "ubuntu-23-10-x64";
 
 const TOKEN_KEY: &str = "DIGITALOCEAN_TOKEN";
 
