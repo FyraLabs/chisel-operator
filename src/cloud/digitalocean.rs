@@ -159,7 +159,7 @@ impl Provisioner for DigitalOceanProvisioner {
                 )
             })?;
 
-            let droplet = api.get_droplet_async(&droplet_id).await?;
+            let droplet = api.get_droplet_async(droplet_id).await?;
 
             let mut status = status.clone();
 

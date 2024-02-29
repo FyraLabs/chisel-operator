@@ -560,7 +560,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 let secret = old_provisioner
                     .find_secret()
                     .await
-                    .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
+                    .map_err(|_| crate::error::ReconcileError::CloudProvisionerSecretNotFound)?
                     .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
 
                 old_provisioner_api
@@ -602,7 +602,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         let secret = provisioner
             .find_secret()
             .await
-            .or_else(|_| Err(crate::error::ReconcileError::CloudProvisionerSecretNotFound))?
+            .map_err(|_| crate::error::ReconcileError::CloudProvisionerSecretNotFound)?
             .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
         finalizer::finalizer(
             &exit_nodes.clone(),

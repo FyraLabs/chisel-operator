@@ -103,7 +103,7 @@ impl Provisioner for LinodeProvisioner {
 
             debug!("Instance status: {:?}", instance.status);
 
-            if instance.ipv4.len() > 0 {
+            if !instance.ipv4.is_empty() {
                 break instance.ipv4[0].clone();
             } else {
                 warn!("Waiting for instance to get IP address");
@@ -171,7 +171,7 @@ impl Provisioner for LinodeProvisioner {
             Ok(status)
         } else {
             warn!("No instance status found, creating new instance");
-            return Ok(self.create_exit_node(auth.clone(), exit_node).await?);
+            return self.create_exit_node(auth.clone(), exit_node).await;
         }
     }
 }

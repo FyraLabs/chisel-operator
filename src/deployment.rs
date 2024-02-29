@@ -114,10 +114,11 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
         .iter()
         .map(|p| {
             format!(
-                "{}:{}:{}:{}",
+                "{}:{}:{}.{}:{}",
                 target_ip,
-                p.port.to_string(),
-                format!("{}.{}", service_name, service_namespace),
+                p.port,
+                service_name,
+                service_namespace,
                 convert_service_port(p.clone())
             )
         })
@@ -223,7 +224,6 @@ pub async fn create_pod_template(
             }],
             ..Default::default()
         }),
-        ..Default::default()
     })
 }
 
