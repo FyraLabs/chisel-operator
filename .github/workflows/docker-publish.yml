@@ -7,6 +7,13 @@ name: Docker
 
 on:
   push:
+    paths:
+      - "Dockerfile"
+      - "src/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - ".dockerignore"
+      - ".github/workflows/docker-publish.yml"
     branches: ["main", "staging"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
