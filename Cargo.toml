@@ -53,7 +53,7 @@ aws-sdk-ec2 = { version = "1.13.0", default-features = false, features = ["rt-to
 aws-sdk-ssm = { version = "1.7.0", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
 aws-smithy-runtime = { version = "1.1.1", default-features = false, features = ["client", "connector-hyper-0-14-x"] }
 hyper-rustls = { version = "0.24.2", features = ["http2", "webpki-roots", "webpki-tokio"] }
-itertools = "0.12.0"
+itertools = "0.12.1"
 # opentelemetry = { version = "0.18.0", features = ["trace", "rt-tokio"] }
 # opentelemetry-otlp = { version = "0.11.0", features = ["tokio"] }
 # tonic = { version = "0.8.3" }
