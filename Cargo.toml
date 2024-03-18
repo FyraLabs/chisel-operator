@@ -46,7 +46,7 @@ rand = { version = "0.8.5", features = ["log", "serde"] }
 async-trait = "0.1.74"
 names = "0.14.0"
 linode-rs = { version = "0.1.3", default-features = false, features = ["default-rustls"] }
-base64 = "0.21.7"
+base64 = "0.22.0"
 trait_enum = "0.5.0"
 aws-config = { version = "1.1.1", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
 aws-sdk-ec2 = { version = "1.13.0", default-features = false, features = ["rt-tokio", "behavior-version-latest"] }
