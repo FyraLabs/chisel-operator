@@ -62,13 +62,22 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// The function `generate_remote_arg` is returning a `String`. The `String`
 /// contains the formatted remote argument which is a combination of the `lb_ip` and `chisel_port`
 /// values obtained from the `node` parameter.
+use std::net::IpAddr;
+
 pub fn generate_remote_arg(node: &ExitNode) -> String {
     // todo: what about ECDSA keys?
 
     let host = node.get_host();
 
     debug!(host = ?host, "Host");
-    let output = format!("{}:{}", host, node.spec.port);
+
+    // Determine if the host is an IPv6 address and format accordingly
+    let formatted_host = match host.parse::<IpAddr>() {
+        Ok(IpAddr::V6(_)) => format!("[{}]", host),
+        _ => host.to_string(),
+    };
+
+    let output = format!("{}:{}", formatted_host, node.spec.port);
     debug!(output = ?output, "Output");
     output
 }
