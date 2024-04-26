@@ -10,7 +10,7 @@ on:
       - "Cargo.lock"
       - "Cargo.toml"
       - ".dockerignore"
-      - ".github/workflows/docker-publish.yml"
+      - ".github/workflows/docker.yml"
     branches: ["main", "staging"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
