@@ -23,3 +23,9 @@ jobs:
     uses: FyraLabs/actions/.github/workflows/docker.yml@main
     with:
       publish: ${{ github.event_name != 'pull_request' }}
+    permissions:
+      contents: read
+      packages: ${{ github.event_name != 'pull_request' && 'write' || 'none' }}
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: ${{ github.event_name != 'pull_request' && 'write' || 'none' }}
