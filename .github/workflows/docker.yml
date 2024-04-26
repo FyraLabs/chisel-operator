@@ -25,7 +25,7 @@ jobs:
       publish: ${{ github.event_name != 'pull_request' }}
     permissions:
       contents: read
-      packages: ${{ github.event_name != 'pull_request' && 'write' || 'none' }}
+      packages: write
       # This is used to complete the identity challenge
       # with sigstore/fulcio when running outside of PRs.
-      id-token: ${{ github.event_name != 'pull_request' && 'write' || 'none' }}
+      id-token: write
