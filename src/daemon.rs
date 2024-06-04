@@ -185,8 +185,7 @@ async fn select_exit_node_local(
             })
             .collect::<Vec<ExitNode>>()
             .first()
-            .ok_or(ReconcileError::NoAvailableExitNodes)
-            .map(|node| node.clone())
+            .ok_or(ReconcileError::NoAvailableExitNodes).cloned()
     }
 }
 
@@ -239,7 +238,7 @@ async fn exit_node_for_service(
                 let mut map = BTreeMap::new();
                 map.insert(
                     EXIT_NODE_PROVISIONER_LABEL.to_string(),
-                    provisioner_name.to_string(),
+                    format!("{}/{}", service.namespace().unwrap(), provisioner_name), // Fixes #38
                 );
                 map
             }),
