@@ -14,7 +14,7 @@ use tracing::{debug, info, warn};
 
 const TOKEN_KEY: &str = "LINODE_TOKEN";
 const INSTANCE_TYPE: &str = "g6-nanode-1";
-const IMAGE_ID: &str = "linode/ubuntu22.04";
+const IMAGE_ID: &str = "linode/ubuntu24.04";
 
 fn default_size() -> String {
     String::from(INSTANCE_TYPE)
