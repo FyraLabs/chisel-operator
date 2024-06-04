@@ -24,13 +24,16 @@
 
 use color_eyre::Result;
 use futures::{FutureExt, StreamExt};
-use k8s_openapi::api::{
-    apps::v1::Deployment,
-    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
+use k8s_openapi::{
+    api::{
+        apps::v1::Deployment,
+        core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
+    },
+    Metadata,
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
-    core::ObjectMeta,
+    core::{object::HasStatus, ObjectMeta},
     error::ErrorResponse,
     runtime::{
         controller::Action,
@@ -174,10 +177,11 @@ async fn select_exit_node_local(
                     })
                     .unwrap_or(false);
 
+                // Should return true if there's any service bindings in the status
                 let has_service_binding = node
                     .status
                     .as_ref()
-                    .map(|status| status.service_binding.is_some())
+                    .map(|status| !status.service_binding.is_empty())
                     .unwrap_or(false);
 
                 // Is the ExitNode not cloud provisioned or is the status set? And (in both cases) does it not have a service binding?
@@ -305,12 +309,17 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     let obj = svc.clone();
 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+    // Find service binding of svc name/namespace?
     let existing_node = node_list.iter().find(|node| {
         node.status
             .as_ref()
-            .and_then(|status| status.service_binding.as_ref())
-            .map(|binding| {
-                binding.name == obj.name_any() && binding.namespace == obj.namespace().unwrap()
+            .map(|status| {
+                status
+                    .find_svc_binding(
+                        &obj.namespace().unwrap(),
+                        &obj.metadata().clone().name.unwrap(),
+                    )
+                    .is_some()
             })
             .unwrap_or(false)
     });
@@ -347,7 +356,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     svc.status = Some(ServiceStatus {
         load_balancer: Some(LoadBalancerStatus {
             ingress: Some(vec![LoadBalancerIngress {
-                ip: Some(exit_node_ip),
+                ip: Some(exit_node_ip.clone()),
                 // hostname: Some(node.get_external_host()),
                 ..Default::default()
             }]),
@@ -404,14 +413,49 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         |event| async move {
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
                 Event::Apply(svc) => {
-                    let node_data = serde_json::json!({
-                        "status": {
-                            "service_binding": ServiceBinding {
-                                namespace: svc.namespace().unwrap(),
-                                name: svc.name_any()
-                            }
-                        }
-                    });
+
+                    // service_binding is a vec of ServiceBinding, so use the current one and add the new one if not already present
+
+
+                    // let node_data = serde_json::json!({
+                    //     "status": {
+                    //         "service_binding": ServiceBinding {
+                    //             namespace: svc.namespace().unwrap(),
+                    //             name: svc.name_any()
+                    //         }
+                    //     }
+                    // });
+
+                    let mut node_data = node.clone();
+
+
+                    // Template for service binding
+                    let svc_binding = ServiceBinding {
+                        namespace: svc.namespace().unwrap(),
+                        name: svc.name_any(),
+                    };
+
+
+                    // if status is None, set it to the new service binding
+                    if node_data.status().is_none() {
+                        node_data.status = Some(ExitNodeStatus {
+                            provider: UNMANAGED_PROVISIONER.to_string(),
+                            name: node_data.name_any(),
+                            ip: exit_node_ip.clone(),
+                            id: None,
+                            service_binding: vec![svc_binding.clone()],
+                        });
+                    }
+
+                    // if status is Some, add the new service binding to the existing ones
+                    if let Some(status) = node_data.status.as_mut() {
+                        status.service_binding.push(svc_binding);
+                    }
+
+                    // Now, let's finally patch the status!
+
+
+
                     let _nodes = namespaced_nodes
                         .patch_status(
                             // We can unwrap safely since Service is guaranteed to have a name
@@ -516,7 +560,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             name: obj.name_any(),
             ip: exit_node_ip,
             id: None,
-            service_binding: None,
+            service_binding: vec![],
         });
 
         let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
@@ -647,29 +691,56 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                         // Okay, now we should also clear the service status if this node has a service binding
 
                         if let Some(status) = &node.status {
-                            if let Some(binding) = &status.service_binding {
-                                info!("Clearing service binding for {}", node.name_any());
+                            // if let Some(binding) = &status.service_binding {
+                            //     info!("Clearing service binding for {}", node.name_any());
 
-                                // get service API
-                                let services: Api<Service> =
-                                    Api::namespaced(ctx.client.clone(), &binding.namespace);
+                            //     // get service API
+                            //     let services: Api<Service> =
+                            //         Api::namespaced(ctx.client.clone(), &binding.namespace);
 
-                                let patch = serde_json::json!({
-                                    "status": {
-                                        "load_balancer": None::<LoadBalancerStatus>
-                                    }
-                                });
+                            //     let patch = serde_json::json!({
+                            //         "status": {
+                            //             "load_balancer": None::<LoadBalancerStatus>
+                            //         }
+                            //     });
 
-                                let _svc = services
-                                    .patch_status(
-                                        // We can unwrap safely since Service is guaranteed to have a name
-                                        &binding.name,
-                                        &serverside.clone(),
-                                        &Patch::Merge(patch),
-                                    )
-                                    .await?;
+                            //     let _svc = services
+                            //         .patch_status(
+                            //             // We can unwrap safely since Service is guaranteed to have a name
+                            //             &binding.name,
+                            //             &serverside.clone(),
+                            //             &Patch::Merge(patch),
+                            //         )
+                            //         .await?;
 
-                                info!("Cleared service binding for {}", node.name_any());
+                            //     info!("Cleared service binding for {}", node.name_any());
+                            // }
+
+                            if !&status.service_binding.is_empty() {
+                                for binding in &status.service_binding {
+                                    info!("Clearing service binding for {}", node.name_any());
+
+                                    // get service API
+                                    let services: Api<Service> =
+                                        Api::namespaced(ctx.client.clone(), &binding.namespace);
+
+                                    let patch = serde_json::json!({
+                                        "status": {
+                                            "load_balancer": None::<LoadBalancerStatus>
+                                        }
+                                    });
+
+                                    let _svc = services
+                                        .patch_status(
+                                            // We can unwrap safely since Service is guaranteed to have a name
+                                            &binding.name,
+                                            &serverside.clone(),
+                                            &Patch::Merge(patch),
+                                        )
+                                        .await?;
+
+                                    info!("Cleared service binding for {}", node.name_any());
+                                }
                             }
                         }
 
