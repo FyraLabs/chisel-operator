@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 
 const DEFAULT_SIZE: &str = "t2.micro";
 const UBUNTU_AMI_SSM_KEY: &str =
-    "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id";
+    "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp2/ami-id";
 
 fn default_size() -> String {
     String::from(DEFAULT_SIZE)
