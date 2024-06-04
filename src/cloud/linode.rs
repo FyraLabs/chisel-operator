@@ -111,13 +111,20 @@ impl Provisioner for LinodeProvisioner {
             }
         };
 
-        let status = ExitNodeStatus {
-            ip: instance_ip,
-            name: instance.label,
-            provider: provisioner.to_string(),
-            id: Some(instance.id.to_string()),
-            service_binding: vec![],
-        };
+        // let status = ExitNodeStatus {
+        //     ip: instance_ip,
+        //     name: instance.label,
+        //     provider: provisioner.to_string(),
+        //     id: Some(instance.id.to_string()),
+        //     service_binding: vec![],
+        // };
+
+        let status = ExitNodeStatus::new(
+            instance_ip,
+            instance.label,
+            provisioner.to_string(),
+            Some(&instance.id.to_string()),
+        );
 
         Ok(status)
     }

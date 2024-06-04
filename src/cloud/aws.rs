@@ -206,13 +206,21 @@ impl Provisioner for AWSProvisioner {
             }
         };
 
-        let exit_node = ExitNodeStatus {
-            name: name.clone(),
-            ip: public_ip,
-            id: Some(instance.instance_id.unwrap()),
-            provider: provisioner.clone(),
-            service_binding: vec![],
-        };
+        // let exit_node = ExitNodeStatus {
+        //     name: name.clone(),
+        //     ip: public_ip,
+        //     id: Some(instance.instance_id.unwrap()),
+        //     provider: provisioner.clone(),
+        //     service_binding: vec![],
+        // };
+        let exit_node = ExitNodeStatus::new(
+            provisioner.clone(),
+            name.clone(),
+            public_ip,
+            // needless conversion?
+            // todo: Clean this up, minor performance hit
+            instance.instance_id.map(|id| id.to_string()).as_deref(),
+        );
 
         Ok(exit_node)
     }

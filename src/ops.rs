@@ -145,6 +145,16 @@ impl ExitNodeStatus {
             .find(|svc| svc.namespace == namespace && svc.name == name)
             .cloned()
     }
+
+    pub fn new(provider: String, name: String, ip: String, id: Option<&str>) -> Self {
+        Self {
+            provider,
+            name,
+            ip,
+            id: None,
+            service_binding: vec![],
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
