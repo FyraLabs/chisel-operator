@@ -146,6 +146,7 @@ impl ExitNodeStatus {
             .cloned()
     }
 
+    #[allow(dead_code)] // It is indeed being used in cloud/*
     pub fn new(provider: String, name: String, ip: String, id: Option<&str>) -> Self {
         Self {
             provider,
