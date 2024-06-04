@@ -13,7 +13,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns: []
-    name: v1
+    name: v1.1
     schema:
       openAPIV3Schema:
         description: Auto-generated derived type for ExitNodeSpec via `CustomResource`
@@ -66,20 +66,22 @@ spec:
               provider:
                 type: string
               service_binding:
-                nullable: true
-                properties:
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                required:
-                - name
-                - namespace
-                type: object
+                items:
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - name
+                  - namespace
+                  type: object
+                type: array
             required:
             - ip
             - name
             - provider
+            - service_binding
             type: object
         required:
         - spec
