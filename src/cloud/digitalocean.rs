@@ -131,13 +131,12 @@ impl Provisioner for DigitalOceanProvisioner {
             }
         };
 
-        let exit_node = ExitNodeStatus {
-            name: name.clone(),
-            ip: droplet_ip.clone(),
-            id: Some(droplet.id.to_string()),
-            provider: provisioner.clone(),
-            service_binding: vec![],
-        };
+        let exit_node = ExitNodeStatus::new(
+            provisioner.clone(),
+            name.clone(),
+            droplet_ip.clone(),
+            Some(&droplet_id),
+        );
 
         Ok(exit_node)
     }
