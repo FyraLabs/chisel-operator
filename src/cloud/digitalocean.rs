@@ -164,7 +164,7 @@ impl Provisioner for DigitalOceanProvisioner {
             let mut status = status.clone();
 
             if let Some(ip) = droplet.networks.v4.iter().find(|net| net.ntype == "public") {
-                status.ip = ip.ip_address.clone();
+                status.ip.clone_from(&ip.ip_address)
             }
 
             Ok(status)

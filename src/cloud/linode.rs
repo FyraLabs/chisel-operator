@@ -165,7 +165,7 @@ impl Provisioner for LinodeProvisioner {
             let mut status = status.clone();
 
             if let Some(ip) = instance?.ipv4.first() {
-                status.ip = ip.to_owned();
+                status.ip.clone_from(ip);
             }
 
             Ok(status)

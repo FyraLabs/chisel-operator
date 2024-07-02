@@ -185,7 +185,8 @@ async fn select_exit_node_local(
             })
             .collect::<Vec<ExitNode>>()
             .first()
-            .ok_or(ReconcileError::NoAvailableExitNodes).cloned()
+            .ok_or(ReconcileError::NoAvailableExitNodes)
+            .cloned()
     }
 }
 
