@@ -6,4 +6,6 @@ on:
 
 jobs:
   rust:
+    permissions:
+      security-events: write
     uses: FyraLabs/actions/.github/workflows/rust.yml@main
