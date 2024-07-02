@@ -1,0 +1,9 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rust:
+    uses: FyraLabs/actions/.github/workflows/rust.yml@main
