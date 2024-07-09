@@ -413,9 +413,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         |event| async move {
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
                 Event::Apply(svc) => {
-
                     // service_binding is a vec of ServiceBinding, so use the current one and add the new one if not already present
-
 
                     // let node_data = serde_json::json!({
                     //     "status": {
@@ -428,13 +426,11 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
                     let mut node_data = node.clone();
 
-
                     // Template for service binding
                     let svc_binding = ServiceBinding {
                         namespace: svc.namespace().unwrap(),
                         name: svc.name_any(),
                     };
-
 
                     // if status is None, set it to the new service binding
                     if node_data.status().is_none() {
@@ -453,8 +449,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
                     }
 
                     // Now, let's finally patch the status!
-
-
 
                     let _nodes = namespaced_nodes
                         .patch_status(
