@@ -29,7 +29,7 @@ pub fn parse_provisioner_label_value<'a>(
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
     group = "chisel-operator.io",
-    version = "v1.1",
+    version = "v2",
     kind = "ExitNode",
     singular = "exitnode",
     struct = "ExitNode",
