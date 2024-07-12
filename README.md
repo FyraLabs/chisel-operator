@@ -104,8 +104,13 @@ There are two ways to use this operator:
   - AWS
 
 ## Cluster Installation
+Install using the Kustomize config from the stable branch:
 
-Install using the Kustomize config:
+```bash
+kubectl apply -k https://github.com/FyraLabs/chisel-operator?ref=stable
+```
+
+Or if you would like to go straight to the latest commit:
 
 ```bash
 kubectl apply -k https://github.com/FyraLabs/chisel-operator
