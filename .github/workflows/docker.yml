@@ -11,7 +11,7 @@ on:
       - "Cargo.toml"
       - ".dockerignore"
       - ".github/workflows/docker.yml"
-    branches: ["main", "staging"]
+    branches: ["main", "stable"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
   pull_request:
