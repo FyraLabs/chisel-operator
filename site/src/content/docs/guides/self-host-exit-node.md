@@ -32,17 +32,10 @@ RestartSec=1
 User=root
 # You can add any additional flags here
 # This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
+# `foo:bar` is an example of the authentication credentials.
+# The format is `username:password`.
+# You may also create an auth file with the `--authfile` flag.
 ExecStart=/usr/local/bin/chisel server --port=9090 --reverse --auth foo:bar
-# ..Or put an additional .env file for auth and secrets
-EnvironmentFile=-/etc/sysconfig/chisel
-```
-
-You'll also need to setup authentication for your Chisel instance. For the above systemd service, this is done in the `/etc/sysconfig/chisel` file:
-
-```bash
-# This is the root credentials for the Chisel server. You can change this to whatever you want. Just make sure to keep it a secret.
-# You can also use the `--authfile` argument in the ExecStart command instead of this, for a custom ACL file (in JSON).
-AUTH=user:password
 ```
 
 Then run `systemctl daemon-reload` and `systemctl enable --now chisel.service` to enable and start the service. The Chisel server will be accessible on all addresses on port `9000`, although, you may need to configure your firewall settings to allow this.
