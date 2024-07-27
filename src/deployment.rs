@@ -212,6 +212,11 @@ pub async fn create_pod_template(
         }]
     });
 
+    // Warn when auth is not set
+    if env.is_none() {
+        tracing::warn!("No auth secret set for exit node! Tunnel will not be secure! This is a security risk!!!");
+    }
+
     Ok(PodTemplateSpec {
         metadata: Some(ObjectMeta {
             labels: Some([("tunnel".to_string(), service_name.to_owned())].into()),

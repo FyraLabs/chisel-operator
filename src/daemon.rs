@@ -642,6 +642,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             .await
             .map_err(|_| crate::error::ReconcileError::CloudProvisionerSecretNotFound)?
             .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
+
         finalizer::finalizer(
             &exit_nodes.clone(),
             EXIT_NODE_FINALIZER,

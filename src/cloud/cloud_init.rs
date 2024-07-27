@@ -4,25 +4,26 @@ pub fn generate_cloud_init_config(password: &str, port: u16) -> String {
       "write_files": [{
         "path": "/etc/systemd/system/chisel.service",
         "content": format!(r#"
-      [Unit]
-      Description=Chisel Tunnel
-      Wants=network-online.target
-      After=network-online.target
-      StartLimitIntervalSec=0
+[Unit]
+Description=Chisel Tunnel
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
 
-      [Install]
-      WantedBy=multi-user.target
+[Install]
+WantedBy=multi-user.target
 
-      [Service]
-      Restart=always
-      RestartSec=1
-      User=root
-      # You can add any additional flags here
-      # This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
-      ExecStart=/usr/local/bin/chisel server --port={port} --reverse
-      # Additional .env file for auth and secrets
-      EnvironmentFile=-/etc/sysconfig/chisel
-      "#)
+[Service]
+Restart=always
+RestartSec=1
+User=root
+# You can add any additional flags here
+# This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
+ExecStart=/usr/local/bin/chisel server --port={port} --reverse --auth chisel:{password}
+# Additional .env file for auth and secrets
+EnvironmentFile=-/etc/sysconfig/chisel
+PassEnvironment=AUTH
+"#)
       }, {
         "path": "/etc/sysconfig/chisel",
         "content": format!("AUTH=chisel:{}\n", password)
