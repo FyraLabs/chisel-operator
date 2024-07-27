@@ -19,7 +19,7 @@ spec:
       automountServiceAccountToken: true
       containers:
         - name: chisel-operator
-          image: ghcr.io/fyralabs/chisel-operator:v0.3.2
+          image: ghcr.io/fyralabs/chisel-operator:v0.3.3
           env:
             - name: RUST_LOG
               value: "debug"
