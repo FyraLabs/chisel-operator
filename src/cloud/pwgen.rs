@@ -4,7 +4,7 @@ pub const DEFAULT_USERNAME: &str = "chisel";
 
 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                         abcdefghijklmnopqrstuvwxyz\
-                        0123456789)(*&^%#@!~";
+                        0123456789-_/()*&#@";
 /// Generates a random password of the specified length.
 ///
 /// # Arguments
