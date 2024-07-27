@@ -32,8 +32,8 @@ RestartSec=1
 User=root
 # You can add any additional flags here
 # This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
-ExecStart=/usr/local/bin/chisel server --port=9090 --reverse
-# Additional .env file for auth and secrets
+ExecStart=/usr/local/bin/chisel server --port=9090 --reverse --auth foo:bar
+# ..Or put an additional .env file for auth and secrets
 EnvironmentFile=-/etc/sysconfig/chisel
 ```
 
