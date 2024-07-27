@@ -1,6 +1,6 @@
-FROM rust:latest as build-env
+FROM rust:latest AS build-env
 RUN apt update
-RUN apt install -y libssl-dev
+RUN apt install -y libssl-dev mold
 WORKDIR /app
 COPY . /app
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
@@ -10,6 +10,7 @@ RUN wget https://github.com/mozilla/sccache/releases/download/v0.2.15/sccache-v0
     && chmod +x /usr/local/bin/sccache
 ENV RUSTC_WRAPPER=/usr/local/bin/sccache
 ENV SCCACHE_DIR=/root/.cache/sccache
+ENV RUSTFLAGS="-C link-arg=-B/usr/bin/mold"
 # copy build artifact somewhere accessible so we can copy it in the next stage
 RUN --mount=type=cache,target=/root/.cargo \
  --mount=type=cache,target=/root/.cache/sccache \
