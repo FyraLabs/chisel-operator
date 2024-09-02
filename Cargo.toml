@@ -43,7 +43,7 @@ tracing-logfmt = "0.3.4"
 uuid = "1.9"
 digitalocean-rs = { version = "0.1.9", default-features = false, features = ["default-rustls"] }
 rand = { version = "0.8.5", features = ["log", "serde"] }
-async-trait = "0.1.80"
+async-trait = "0.1.82"
 names = "0.14.0"
 linode-rs = { version = "0.1.3", default-features = false, features = ["default-rustls"] }
 base64 = "0.22.0"
