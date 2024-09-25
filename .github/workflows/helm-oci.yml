@@ -24,7 +24,7 @@ jobs:
       path: charts/chisel-operator
       registry: ghcr.io
       registry_username: ${{ github.actor }}
-      registry_password: ${{ secrets.GITHUB_TOKEN }}
+      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
       update_dependencies: 'true' # Defaults to false
     permissions:
       contents: read
