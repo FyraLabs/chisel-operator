@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - "charts/**"
+      - ".github/workflows/helm-oci.yml"
       
     branches: ["main", "stable"]
     # Publish semver tags as releases.
@@ -32,9 +33,9 @@ jobs:
         name: chisel-operator
         repository: chisel-operator
         tag: 0.1.0
-        path: charts/chisel-operator
+        path: fyralabs/chisel-operator/chart
         registry: ghcr.io
         registry_username: ${{ github.actor }}
         registry_password: ${{ secrets.GITHUB_TOKEN }}
-        update_dependencies: true
+        # update_dependencies: true
 
