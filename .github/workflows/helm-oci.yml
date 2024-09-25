@@ -30,8 +30,8 @@ jobs:
     - uses: actions/checkout@v2
     - uses: appany/helm-oci-chart-releaser@v0.3.0
       with:
-        name: chisel-operator
-        repository: chisel-operator
+        name: chisel-operator-chart
+        repository: fyralabs/chisel-operator
         tag: 0.1.0
         path: charts/chisel-operator
         registry: ghcr.io
