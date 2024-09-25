@@ -29,7 +29,7 @@ pub fn parse_provisioner_label_value<'a>(
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
 #[kube(
     group = "chisel-operator.io",
-    version = "v2",
+    version = "v1",
     kind = "ExitNode",
     singular = "exitnode",
     struct = "ExitNode",
@@ -135,16 +135,16 @@ pub struct ExitNodeStatus {
     // pub password: String,
     pub ip: String,
     pub id: Option<String>,
-    pub service_binding: Vec<ServiceBinding>,
+    // pub service_binding: Vec<ServiceBinding>,
 }
 
 impl ExitNodeStatus {
-    pub fn find_svc_binding(&self, namespace: &str, name: &str) -> Option<ServiceBinding> {
-        self.service_binding
-            .iter()
-            .find(|svc| svc.namespace == namespace && svc.name == name)
-            .cloned()
-    }
+    // pub fn find_svc_binding(&self, namespace: &str, name: &str) -> Option<ServiceBinding> {
+    //     self.service_binding
+    //         .iter()
+    //         .find(|svc| svc.namespace == namespace && svc.name == name)
+    //         .cloned()
+    // }
 
     // It is indeed being used in cloud/*
     #[allow(unused_variables)]
@@ -154,7 +154,7 @@ impl ExitNodeStatus {
             name,
             ip,
             id: None,
-            service_binding: vec![],
+            // service_binding: vec![],
         }
     }
 }

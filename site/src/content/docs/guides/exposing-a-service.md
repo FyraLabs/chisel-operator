@@ -30,6 +30,8 @@ Additionally, there's also a commented out annotation, `chisel-operator.io/exit-
 By default, Chisel Operator will automatically select a random, unused `ExitNode` on the cluster if a cloud provisioner or exit node annotation is not set.
 If you'd like to force the service to a particular exit node, you can uncomment out the annotation, setting it to the name of the `ExitNode` to target.
 
+> As of Chisel Operator 0.4.0, you can now force multiple services to use the same exit node by setting the `chisel-operator.io/exit-node-name` annotation to the same value on each service, this can be useful by allowing you to group services together on the same exit node, saving resources by only running one exit node for multiple services.
+
 <!-- TODO: cross namespace -->
 
 Let's look at another example, this time using the automatic cloud provisioning functionality:

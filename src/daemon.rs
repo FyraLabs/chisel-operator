@@ -79,15 +79,40 @@ pub struct Context {
     pub client: Client,
 }
 
+/// Parses the `query` string to extract the namespace and name.
+/// If the `query` contains a '/', it splits the `query` into two parts:
+/// the namespace and the name. Otherwise, it uses the `og_namespace`
+/// as the namespace and the entire `query` as the name.
+///
+/// # Arguments
+///
+/// * `query` - A string slice that holds the query to be parsed.
+/// * `og_namespace` - A string slice that holds the original namespace.
+///
+/// # Returns
+///
+/// A tuple containing the namespace and name as string slices.
 #[instrument(skip(ctx))]
-async fn find_exit_node_from_label(ctx: Arc<Context>, query: &str) -> Option<ExitNode> {
-    let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
+async fn find_exit_node_from_label(
+    ctx: Arc<Context>,
+    query: &str,
+    og_namespace: &str,
+) -> Option<ExitNode> {
+    // parse the query to get the namespace and name
+    let (namespace, name) = if let Some((ns, nm)) = query.split_once('/') {
+        (ns, nm)
+    } else {
+        // if the query does not contain a '/', use the original namespace
+        (og_namespace, query)
+    };
+
+    let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), namespace);
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
     node_list.items.into_iter().find(|node| {
         node.metadata
             .name
             .as_ref()
-            .map(|name| name == query)
+            .map(|n| n == name)
             .unwrap_or(false)
     })
 }
@@ -155,9 +180,17 @@ async fn select_exit_node_local(
         .as_ref()
         .and_then(|labels| labels.get(EXIT_NODE_NAME_LABEL))
     {
-        find_exit_node_from_label(ctx.clone(), exit_node_name)
-            .await
-            .ok_or(ReconcileError::NoAvailableExitNodes)
+        info!(
+            ?exit_node_name,
+            "Service explicitly set to use a named exit node, using that"
+        );
+        find_exit_node_from_label(
+            ctx.clone(),
+            exit_node_name,
+            &service.namespace().expect("Service namespace not found"),
+        )
+        .await
+        .ok_or(ReconcileError::NoAvailableExitNodes)
     } else {
         // otherwise, use the first available exit node
         // (one to one mapping)
@@ -177,15 +210,8 @@ async fn select_exit_node_local(
                     })
                     .unwrap_or(false);
 
-                // Should return true if there's any service bindings in the status
-                let has_service_binding = node
-                    .status
-                    .as_ref()
-                    .map(|status| !status.service_binding.is_empty())
-                    .unwrap_or(false);
-
-                // Is the ExitNode not cloud provisioned or is the status set? And (in both cases) does it not have a service binding?
-                (!is_cloud_provisioned || node.status.is_some()) && !has_service_binding
+                // Is the ExitNode not cloud provisioned or is the status set?
+                !is_cloud_provisioned || node.status.is_some()
             })
             .collect::<Vec<ExitNode>>()
             .first()
@@ -311,16 +337,10 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
     // Find service binding of svc name/namespace?
     let existing_node = node_list.iter().find(|node| {
-        node.status
+        node.metadata
+            .annotations
             .as_ref()
-            .map(|status| {
-                status
-                    .find_svc_binding(
-                        &obj.namespace().unwrap(),
-                        &obj.metadata().clone().name.unwrap(),
-                    )
-                    .is_some()
-            })
+            .map(|annotations| annotations.contains_key(EXIT_NODE_NAME_LABEL))
             .unwrap_or(false)
     });
 
@@ -338,7 +358,13 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             }
 
             exit_node
-        } else {
+        }
+        // If a service *specifically* chooses a named exit node, use that one
+        // Allows support for multiple services to use the same exit node
+
+        // Else, use the first available exit node
+        // Fails if there's no empty exit node available
+        else {
             select_exit_node_local(ctx.clone(), &obj).await?
         }
     };
@@ -412,76 +438,14 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         obj.clone().into(),
         |event| async move {
             let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event {
-                Event::Apply(svc) => {
-                    // service_binding is a vec of ServiceBinding, so use the current one and add the new one if not already present
-
-                    // let node_data = serde_json::json!({
-                    //     "status": {
-                    //         "service_binding": ServiceBinding {
-                    //             namespace: svc.namespace().unwrap(),
-                    //             name: svc.name_any()
-                    //         }
-                    //     }
-                    // });
-
-                    let mut node_data = node.clone();
-
-                    // Template for service binding
-                    let svc_binding = ServiceBinding {
-                        namespace: svc.namespace().unwrap(),
-                        name: svc.name_any(),
-                    };
-
-                    // if status is None, set it to the new service binding
-                    if node_data.status().is_none() {
-                        node_data.status = Some(ExitNodeStatus {
-                            provider: UNMANAGED_PROVISIONER.to_string(),
-                            name: node_data.name_any(),
-                            ip: exit_node_ip.clone(),
-                            id: None,
-                            service_binding: vec![svc_binding.clone()],
-                        });
-                    }
-
-                    // if status is Some, add the new service binding to the existing ones
-                    if let Some(status) = node_data.status.as_mut() {
-                        status.service_binding.push(svc_binding);
-                    }
-
-                    // Now, let's finally patch the status!
-
-                    let _nodes = namespaced_nodes
-                        .patch_status(
-                            // We can unwrap safely since Service is guaranteed to have a name
-                            node.name_any().as_str(),
-                            &serverside.clone(),
-                            &Patch::Merge(&node_data),
-                        )
-                        .await?;
-
+                Event::Apply(_svc) => {
                     info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
                     Ok(Action::requeue(Duration::from_secs(3600)))
                 }
                 Event::Cleanup(svc) => {
                     info!("Cleanup finalizer triggered for {}", svc.name_any());
-                    let node_data = serde_json::json!({
-                        "status": {
-                            "service_binding": Option::<ServiceBinding>::None
-                        }
-                    });
-                    let _nodes = namespaced_nodes
-                        .patch_status(
-                            // We can unwrap safely since Service is guaranteed to have a name
-                            node.name_any().as_str(),
-                            &serverside.clone(),
-                            &Patch::Merge(&node_data),
-                        )
-                        .await?;
-
-                    info!(status = ?node, "Patched status for ExitNode {}", node.name_any());
 
                     // Clean up deployment when service is deleted
-
                     let deployments: Api<Deployment> =
                         Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
 
@@ -554,7 +518,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             name: obj.name_any(),
             ip: exit_node_ip,
             id: None,
-            service_binding: vec![],
         });
 
         let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
@@ -683,62 +646,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                     Event::Cleanup(node) => {
                         info!("Cleanup finalizer triggered for {}", node.name_any());
 
-                        // Okay, now we should also clear the service status if this node has a service binding
-
-                        if let Some(status) = &node.status {
-                            // if let Some(binding) = &status.service_binding {
-                            //     info!("Clearing service binding for {}", node.name_any());
-
-                            //     // get service API
-                            //     let services: Api<Service> =
-                            //         Api::namespaced(ctx.client.clone(), &binding.namespace);
-
-                            //     let patch = serde_json::json!({
-                            //         "status": {
-                            //             "load_balancer": None::<LoadBalancerStatus>
-                            //         }
-                            //     });
-
-                            //     let _svc = services
-                            //         .patch_status(
-                            //             // We can unwrap safely since Service is guaranteed to have a name
-                            //             &binding.name,
-                            //             &serverside.clone(),
-                            //             &Patch::Merge(patch),
-                            //         )
-                            //         .await?;
-
-                            //     info!("Cleared service binding for {}", node.name_any());
-                            // }
-
-                            if !&status.service_binding.is_empty() {
-                                for binding in &status.service_binding {
-                                    info!("Clearing service binding for {}", node.name_any());
-
-                                    // get service API
-                                    let services: Api<Service> =
-                                        Api::namespaced(ctx.client.clone(), &binding.namespace);
-
-                                    let patch = serde_json::json!({
-                                        "status": {
-                                            "load_balancer": None::<LoadBalancerStatus>
-                                        }
-                                    });
-
-                                    let _svc = services
-                                        .patch_status(
-                                            // We can unwrap safely since Service is guaranteed to have a name
-                                            &binding.name,
-                                            &serverside.clone(),
-                                            &Patch::Merge(patch),
-                                        )
-                                        .await?;
-
-                                    info!("Cleared service binding for {}", node.name_any());
-                                }
-                            }
-                        }
-
                         if is_managed {
                             info!("Deleting cloud resource for {}", node.name_any());
                             provisioner_api
@@ -752,7 +659,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                     }
                 };
 
-                // Ok(Action::requeue(Duration::from_secs(3600)))
                 m
             },
         )
@@ -768,10 +674,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
     } else {
         Ok(Action::requeue(Duration::from_secs(3600)))
     }
-
-    // handle deletion
-
-    // Ok(Action::requeue(Duration::from_secs(3600)))
 }
 
 /// watches for Kubernetes service resources and runs a controller to reconcile them.
