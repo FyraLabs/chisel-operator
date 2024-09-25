@@ -23,9 +23,9 @@ const CHISEL_IMAGE: &str = "jpillora/chisel";
 /// Arguments:
 ///
 /// * `svcport`: `svcport` is a variable of type `ServicePort`, which is likely a struct or enum that
-/// represents a service port in a network application. The function `convert_service_port` takes this
-/// `svcport` as input and returns a string representation of the port number and protocol (if
-/// specified).
+///   represents a service port in a network application. The function `convert_service_port` takes this
+///   `svcport` as input and returns a string representation of the port number and protocol (if
+///   specified).
 ///
 /// Returns:
 ///
@@ -54,8 +54,8 @@ fn convert_service_port(svcport: ServicePort) -> String {
 /// Arguments:
 ///
 /// * `node`: `node` is a reference to an `ExitNode` struct, which contains information about a specific
-/// exit node in a network. The function `generate_remote_arg` takes this node as input and generates a
-/// remote argument that can be used to connect to the exit node.
+///   exit node in a network. The function `generate_remote_arg` takes this node as input and generates a
+///   remote argument that can be used to connect to the exit node.
 ///
 /// Returns:
 ///
@@ -87,8 +87,8 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 /// Arguments:
 ///
 /// * `svc`: `svc` is a reference to a `Service` object, which represents a set of pods that provide a
-/// common network service. The function `generate_tunnel_args` takes this `Service` object as input and
-/// generates a set of arguments that can be used to create a tunnel to the service.
+///   common network service. The function `generate_tunnel_args` takes this `Service` object as input and
+///   generates a set of arguments that can be used to create a tunnel to the service.
 ///
 /// Returns:
 ///
