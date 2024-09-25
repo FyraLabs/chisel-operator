@@ -24,16 +24,13 @@
 
 use color_eyre::Result;
 use futures::{FutureExt, StreamExt};
-use k8s_openapi::{
-    api::{
-        apps::v1::Deployment,
-        core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
-    },
-    Metadata,
+use k8s_openapi::api::{
+    apps::v1::Deployment,
+    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
-    core::{object::HasStatus, ObjectMeta},
+    core::ObjectMeta,
     error::ErrorResponse,
     runtime::{
         controller::Action,
@@ -52,7 +49,8 @@ use tracing::{debug, error, info, instrument, warn};
 use crate::{
     cloud::Provisioner,
     ops::{
-        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
+        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
+        EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
@@ -424,12 +422,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         )
         .await?;
 
-    tracing::trace!("deployment: {:?}", _deployment);
-
-    // set service binding to exit node
-
-    let namespaced_nodes: Api<ExitNode> =
-        Api::namespaced(ctx.client.clone(), &node.namespace().unwrap());
+    tracing::trace!(?_deployment);
 
     finalizer::finalizer(
         &services,
