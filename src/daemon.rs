@@ -52,8 +52,7 @@ use tracing::{debug, error, info, instrument, warn};
 use crate::{
     cloud::Provisioner,
     ops::{
-        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
-        ServiceBinding, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
+        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus, EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
