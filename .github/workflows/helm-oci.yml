@@ -1,4 +1,4 @@
-name: Docker
+name: Helm OCI
 
 on:
   schedule:
@@ -7,28 +7,34 @@ on:
     paths:
       - "charts/**"
       
-    branches: ["main", "staging"]
+    branches: ["main", "stable"]
     # Publish semver tags as releases.
-    tags: ["v*.*.*"]
+    # tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
 
 jobs:
   docker:
-    uses: appany/helm-oci-chart-releaser@v0.3.0
-    with:
-      name: chisel-operator
-      repository: chisel-operator
-      tag: 0.1.0
-      path: charts/chisel-operator
-      registry: ghcr.io
-      registry_username: ${{ github.actor }}
-      registry_password: ${{ secrets.REGISTRY_PASSWORD }}
-      update_dependencies: 'true' # Defaults to false
+
     permissions:
       contents: read
       packages: write
       # This is used to complete the identity challenge
       # with sigstore/fulcio when running outside of PRs.
       id-token: write
+    # uses: appany/helm-oci-chart-releaser@v0.3.0
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: appany/helm-oci-chart-releaser@v0.3.0
+      with:
+        name: chisel-operator
+        repository: chisel-operator
+        tag: 0.1.0
+        path: charts/chisel-operator
+        registry: ghcr.io
+        registry_username: ${{ github.actor }}
+        registry_password: ${{ secrets.GITHUB_TOKEN }}
+        update_dependencies: true
+
