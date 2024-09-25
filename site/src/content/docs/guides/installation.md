@@ -18,4 +18,18 @@ Or if you would like to go straight to the latest commit:
 kubectl apply -k https://github.com/FyraLabs/chisel-operator
 ```
 
-Yup, that's it.
+## Helm
+
+To install using Helm, you can use the Chisel Operator Helm chart from the OCI registry:
+
+```bash
+helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-operator
+```
+
+You can configure the helm chart values by creating a `values.yaml` file and passing it to the `helm install` command:
+
+```bash
+helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-operator -f values.yaml
+```
+
+See [the Helm chart directory](https://github.com/FyraLabs/chisel-operator/tree/main/charts/chisel-operator) for more information on the Helm chart.
