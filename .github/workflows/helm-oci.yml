@@ -33,7 +33,7 @@ jobs:
         name: chisel-operator
         repository: chisel-operator
         tag: 0.1.0
-        path: fyralabs/chisel-operator/chart
+        path: charts/chisel-operator
         registry: ghcr.io
         registry_username: ${{ github.actor }}
         registry_password: ${{ secrets.GITHUB_TOKEN }}
