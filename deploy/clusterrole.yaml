@@ -3,6 +3,15 @@ kind: ClusterRole
 metadata:
   name: chisel-operator
 rules:
-  - apiGroups: ["*"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/*"]
+    verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["services", "services/status", "services/finalizers"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: ["chisel-operator.io"]
     resources: ["*"]
     verbs: ["*"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "patch", "delete"]
