@@ -21,7 +21,7 @@ View the documentation: https://chisel.fyralabs.com
 - [x] Multiple tunnel services per exit node (so you don't have to pay for multiple VMs)
 - [x] Extra configuration options
 - [x] TCP/UDP support
-- [ ] Multiple IPs per exit node
+- [x] Multiple IPs per exit node
 - [x] Multiple exit nodes support
 - [x] Cloud provisioner (like inletsctl/inlets-operator)
 
