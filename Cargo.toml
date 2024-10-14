@@ -25,7 +25,7 @@ default-run = "chisel-operator"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-kube = { version = "0.82.2", features = [
+kube = { version = "0.96.0", features = [
     "runtime",
     "derive",
     "rustls-tls",
