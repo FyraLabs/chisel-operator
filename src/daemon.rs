@@ -58,6 +58,8 @@ use crate::{deployment::create_owned_deployment, error::ReconcileError};
 pub const EXIT_NODE_FINALIZER: &str = "exitnode.chisel-operator.io/finalizer";
 pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
 
+// todo: Refactor everything in here into separate functions, then we can write unit tests for them
+
 // pub fn get_trace_id() -> opentelemetry::trace::TraceId {
 //     // opentelemetry::Context -> opentelemetry::trace::Span
 //     use opentelemetry::trace::TraceContextExt as _;
@@ -582,6 +584,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             }
         }
 
+        // Find provisioner
         let provisioner = find_exit_node_provisioner_from_label(
             ctx.clone(),
             &obj.namespace().unwrap(),
@@ -590,6 +593,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
         .await
         .ok_or(ReconcileError::CloudProvisionerNotFound)?;
 
+        // Get provisioner API handle
         let provisioner_api = provisioner.clone().spec.get_inner();
 
         let secret = provisioner
@@ -597,6 +601,8 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             .await
             .map_err(|_| crate::error::ReconcileError::CloudProvisionerSecretNotFound)?
             .ok_or(ReconcileError::CloudProvisionerSecretNotFound)?;
+
+        debug!(?secret, "Secret");
 
         finalizer::finalizer(
             &exit_nodes.clone(),
@@ -607,21 +613,41 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 {
                     Event::Apply(node) => {
                         let _node = {
+
+                            let mut pass_secret: Option<k8s_openapi::api::core::v1::Secret> = None;
+                            // if status exists, update, else create
                             let cloud_resource = if let Some(_status) = node.status.as_ref() {
                                 info!("Updating cloud resource for {}", node.name_any());
                                 provisioner_api
                                     .update_exit_node(secret.clone(), (*node).clone())
                                     .await
                             } else {
+                                // todo: probably update the Provisioner trait to accept a provisioner API handle or
+                                // the provisioner API token *and* then a password secret
+                                // Right now we have the create_exit_node method which returns the password secret alongside the status
+
+                                // create cloud resource
                                 info!("Creating cloud resource for {}", node.name_any());
-                                provisioner_api
+
+                                let (resource, new_pass_secret) = provisioner_api
                                     .create_exit_node(secret.clone(), (*node).clone())
-                                    .await
+                                    .await?;
+                                pass_secret = Some(new_pass_secret);
+                                Ok(resource)
                             };
                             // TODO: Don't replace the entire status and object, sadly JSON is better here
-                            let exitnode_patch = serde_json::json!({
-                                "status": cloud_resource?
-                            });
+                            let exitnode_patch = if let Some(p_secret) = pass_secret {
+                                serde_json::json!({
+                                    "status": cloud_resource?,
+                                    "spec": {
+                                        "auth": p_secret.name_any(),
+                                    }
+                                })
+                            } else {
+                                serde_json::json!({
+                                    "status": cloud_resource?,
+                                })
+                            };
 
                             exit_nodes
                                 .patch_status(

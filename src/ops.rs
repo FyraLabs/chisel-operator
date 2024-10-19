@@ -88,6 +88,7 @@ impl ExitNode {
     ///
     /// Generates a new secret with the `auth` key containing the auth string for chisel in the same namespace as the ExitNode
     pub async fn generate_secret(&self, password: String) -> Result<Secret> {
+        debug!("Generating secret for ExitNode");
         let secret_name = self.get_secret_name();
 
         let auth_tmpl = format!("{}:{}", crate::cloud::pwgen::DEFAULT_USERNAME, password);

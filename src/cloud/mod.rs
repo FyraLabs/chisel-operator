@@ -27,7 +27,8 @@ pub trait Provisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-    ) -> color_eyre::Result<ExitNodeStatus>;
+        // Should return the pointer to the password secret for the exit node
+    ) -> color_eyre::Result<(ExitNodeStatus, Secret)>;
     async fn update_exit_node(
         &self,
         auth: Secret,

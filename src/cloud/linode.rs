@@ -54,10 +54,11 @@ impl Provisioner for LinodeProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-    ) -> color_eyre::Result<ExitNodeStatus> {
+    ) -> color_eyre::Result<(ExitNodeStatus, Secret)> {
         let password = generate_password(32);
 
-        let _secret = exit_node.generate_secret(password.clone()).await?;
+        // Password for the server
+        let secret = exit_node.generate_secret(password.clone()).await?;
 
         let config = generate_cloud_init_config(&password, exit_node.spec.port);
 
@@ -126,7 +127,7 @@ impl Provisioner for LinodeProvisioner {
             Some(&instance.id.to_string()),
         );
 
-        Ok(status)
+        Ok((status, secret))
     }
 
     async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()> {
@@ -178,7 +179,7 @@ impl Provisioner for LinodeProvisioner {
             Ok(status)
         } else {
             warn!("No instance status found, creating new instance");
-            return self.create_exit_node(auth.clone(), exit_node).await;
+            return self.create_exit_node(auth.clone(), exit_node).await.map(|(status, _)| status);
         }
     }
 }

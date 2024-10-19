@@ -112,7 +112,7 @@ impl Provisioner for AWSProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-    ) -> color_eyre::Result<ExitNodeStatus> {
+    ) -> color_eyre::Result<(ExitNodeStatus, Secret)> {
         let provisioner = exit_node
             .metadata
             .annotations
@@ -126,6 +126,8 @@ impl Provisioner for AWSProvisioner {
             })?;
 
         let password = generate_password(32);
+
+        let secret = exit_node.generate_secret(password.clone()).await?;
 
         let cloud_init_config = generate_cloud_init_config(&password, CHISEL_PORT);
         let user_data = base64::engine::general_purpose::STANDARD.encode(cloud_init_config);
@@ -222,7 +224,7 @@ impl Provisioner for AWSProvisioner {
             instance.instance_id.map(|id| id.to_string()).as_deref(),
         );
 
-        Ok(exit_node)
+        Ok((exit_node, secret))
     }
 
     async fn update_exit_node(
@@ -268,7 +270,7 @@ impl Provisioner for AWSProvisioner {
         } else {
             warn!("No status found for exit node, creating new instance");
             // TODO: this should be handled by the controller logic
-            return self.create_exit_node(auth, exit_node).await;
+            return self.create_exit_node(auth, exit_node).await.map(|(status, _)| status);
         }
     }
 
