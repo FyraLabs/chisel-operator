@@ -179,7 +179,10 @@ impl Provisioner for LinodeProvisioner {
             Ok(status)
         } else {
             warn!("No instance status found, creating new instance");
-            return self.create_exit_node(auth.clone(), exit_node).await.map(|(status, _)| status);
+            return self
+                .create_exit_node(auth.clone(), exit_node)
+                .await
+                .map(|(status, _)| status);
         }
     }
 }

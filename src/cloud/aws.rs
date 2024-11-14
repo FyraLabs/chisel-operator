@@ -270,7 +270,10 @@ impl Provisioner for AWSProvisioner {
         } else {
             warn!("No status found for exit node, creating new instance");
             // TODO: this should be handled by the controller logic
-            return self.create_exit_node(auth, exit_node).await.map(|(status, _)| status);
+            return self
+                .create_exit_node(auth, exit_node)
+                .await
+                .map(|(status, _)| status);
         }
     }
 
