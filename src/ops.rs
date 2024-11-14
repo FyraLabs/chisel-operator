@@ -128,7 +128,27 @@ impl ExitNode {
 
         Ok(secret)
     }
+
+    /// Checks if the exit node is already assigned to a service
+    pub fn is_assigned(&self) -> bool {
+        self.metadata
+            .annotations
+            .as_ref()
+            .map(|annotations| annotations.contains_key(EXIT_NODE_NAME_LABEL))
+            .unwrap_or(false)
+    }
+
+    /// Gets the IP address of the exit node
+    pub fn get_ip(&self) -> Option<String> {
+        self.status.as_ref().map(|status| status.ip.clone())
+    }
+
+    /// Gets the name of the exit node
+    pub fn get_name(&self) -> Option<String> {
+        self.metadata.name.clone()
+    }
 }
+
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct ExitNodeStatus {
     pub provider: String,

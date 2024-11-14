@@ -16,10 +16,6 @@
    There can also be a case where the user creates an exit node manually,
    with the provisioner annotation set, in that case chisel operator will
    create a cloud resource for that exit node and manages it.
-
-   todo: properly handle all this logic
-
-   todo: use `tracing` and put every operation in a span to make debugging easier
 */
 
 use color_eyre::Result;
@@ -210,7 +206,7 @@ async fn select_exit_node_local(
                     .unwrap_or(false);
 
                 // Is the ExitNode not cloud provisioned or is the status set?
-                !is_cloud_provisioned || node.status.is_some()
+                (!is_cloud_provisioned || node.status.is_some()) && !node.is_assigned()
             })
             .collect::<Vec<ExitNode>>()
             .first()
@@ -613,7 +609,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                 {
                     Event::Apply(node) => {
                         let _node = {
-
                             let mut pass_secret: Option<k8s_openapi::api::core::v1::Secret> = None;
                             // if status exists, update, else create
                             let cloud_resource = if let Some(_status) = node.status.as_ref() {
