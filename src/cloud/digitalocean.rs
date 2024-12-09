@@ -61,12 +61,12 @@ impl Provisioner for DigitalOceanProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-    ) -> color_eyre::Result<ExitNodeStatus> {
+    ) -> color_eyre::Result<(ExitNodeStatus, Secret)> {
         let password = generate_password(32);
 
         // create secret for password too
 
-        let _secret = exit_node.generate_secret(password.clone()).await?;
+        let secret = exit_node.generate_secret(password.clone()).await?;
 
         let config = generate_cloud_init_config(&password, exit_node.spec.port);
 
@@ -138,7 +138,7 @@ impl Provisioner for DigitalOceanProvisioner {
             Some(&droplet_id),
         );
 
-        Ok(exit_node)
+        Ok((exit_node, secret))
     }
 
     async fn update_exit_node(
@@ -170,7 +170,8 @@ impl Provisioner for DigitalOceanProvisioner {
         } else {
             warn!("No status found for exit node, creating new droplet");
             // TODO: this should be handled by the controller logic
-            return self.create_exit_node(auth, exit_node).await;
+            let (status, _) = self.create_exit_node(auth, exit_node).await?;
+            return Ok(status);
         }
     }
 
