@@ -7,6 +7,11 @@ replicaCount: 1 # Right now only 1 replica is supported
 # For now, we recommend running only 1 replica else Chisel Operator may constantly
 # recreate resources, wasting your API resources and costing you money.
 
+# Add the ability to limit to just the chisel opertator LoadBalancerClass
+# Set requireOperatorClass: true to limit the LoadBalancers picked up by chisel-operator
+global:
+  requireOperatorClass: false
+
 image:
   repository: ghcr.io/fyralabs/chisel-operator
   pullPolicy: IfNotPresent

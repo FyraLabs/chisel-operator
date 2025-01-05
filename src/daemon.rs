@@ -42,6 +42,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use std::time::Duration;
 use tracing::{debug, error, info, instrument, warn};
 
+use std::env;
+
 use crate::{
     cloud::Provisioner,
     ops::{
@@ -301,6 +303,13 @@ async fn exit_node_for_service(
 async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to $OPERATOR_CLASS
 
+    // Check if the REQUIRE_OPERATOR_CLASS environment variable is set
+    let limit_load_balancer_class;
+    match env::var("REQUIRE_OPERATOR_CLASS") {
+        Ok(v) => limit_load_balancer_class = v,
+        Err(_e) => limit_load_balancer_class = "false".to_string(),
+    }
+
     // todo: is there anything different need to be done for OpenShift? We use vanilla k8s and k3s/rke2 so we don't know
     if obj
         .spec
@@ -311,7 +320,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             .spec
             .as_ref()
             .filter(|spec| {
-                spec.load_balancer_class.is_none()
+                (spec.load_balancer_class.is_none() && ( limit_load_balancer_class == "false"))
                     || spec.load_balancer_class == Some(OPERATOR_CLASS.to_string())
             })
             .is_none()

@@ -32,6 +32,9 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          env:
+            - name: "REQUIRE_OPERATOR_CLASS"
+              value: "{{.Values.global.requireOperatorClass}}"
 
       {{- with .Values.nodeSelector }}
       nodeSelector:
