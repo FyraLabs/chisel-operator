@@ -1,4 +1,4 @@
-use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
+use super::{cloud_init::generate_cloud_init_config, Provisioner};
 use crate::ops::{
     parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL,
 };
@@ -54,9 +54,9 @@ impl Provisioner for LinodeProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
-        node_password: String,
+        chisel_auth_string: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
-        let config = generate_cloud_init_config(&node_password, exit_node.spec.port);
+        let config = generate_cloud_init_config(&chisel_auth_string, exit_node.spec.port);
 
         // Okay, so apparently Linode uses base64 for user_data, so let's
         // base64 encode the config
@@ -82,9 +82,12 @@ impl Provisioner for LinodeProvisioner {
             exit_node.metadata.name.as_ref().unwrap()
         );
 
+        // Since we now directly pass in the chisel auth string with the `chisel:` prefix, let's remove the prefix
+        let root_password = chisel_auth_string.strip_prefix("chisel:").unwrap_or(&chisel_auth_string);
+
         let mut instance = api
             .create_instance(&self.region, &self.size)
-            .root_pass(&node_password)
+            .root_pass(root_password)
             .label(&name)
             .user_data(&user_data)
             .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])

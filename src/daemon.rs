@@ -731,7 +731,7 @@ pub async fn run() -> color_eyre::Result<()> {
                     client: client.clone(),
                 }),
             )
-            .for_each(|result_value| futures::future::ready(()))
+            .for_each(|_| futures::future::ready(()))
             .boxed(),
     );
 
@@ -756,7 +756,7 @@ pub async fn run() -> color_eyre::Result<()> {
                 error_policy_exit_node,
                 Arc::new(Context { client }),
             )
-            .for_each(|result_value| futures::future::ready(()))
+            .for_each(|_| futures::future::ready(()))
             .boxed(),
     );
 

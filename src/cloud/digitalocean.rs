@@ -1,4 +1,4 @@
-use super::{cloud_init::generate_cloud_init_config, pwgen::generate_password, Provisioner};
+use super::{cloud_init::generate_cloud_init_config, Provisioner};
 use crate::ops::{
     parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL,
 };
