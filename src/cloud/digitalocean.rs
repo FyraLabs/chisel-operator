@@ -61,14 +61,10 @@ impl Provisioner for DigitalOceanProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
-        let password = generate_password(32);
 
-        // create secret for password too
-
-        let _secret = exit_node.generate_secret(password.clone()).await?;
-
-        let config = generate_cloud_init_config(&password, exit_node.spec.port);
+        let config = generate_cloud_init_config(&node_password, exit_node.spec.port);
 
         // TODO: Secret reference, not plaintext
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth).await?);
@@ -137,7 +133,7 @@ impl Provisioner for DigitalOceanProvisioner {
             droplet_ip.clone(),
             Some(droplet_id),
         );
-        
+
         debug!(?exit_node, "Created exit node!!");
 
         Ok(exit_node)
@@ -147,6 +143,7 @@ impl Provisioner for DigitalOceanProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
         // check if droplet exists, then update it
         let api: DigitalOceanApi = DigitalOceanApi::new(self.get_token(auth.clone()).await?);
@@ -172,7 +169,7 @@ impl Provisioner for DigitalOceanProvisioner {
         } else {
             warn!("No status found for exit node, creating new droplet");
             // TODO: this should be handled by the controller logic
-            return self.create_exit_node(auth, exit_node).await;
+            return self.create_exit_node(auth, exit_node, node_password).await;
         }
     }
 

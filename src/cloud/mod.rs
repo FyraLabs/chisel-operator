@@ -27,11 +27,13 @@ pub trait Provisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus>;
     async fn update_exit_node(
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus>;
     async fn delete_exit_node(&self, auth: Secret, exit_node: ExitNode) -> color_eyre::Result<()>;
 }

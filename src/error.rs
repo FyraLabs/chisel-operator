@@ -16,6 +16,15 @@ pub enum ReconcileError {
     #[error("The secret keys for the cloud provisioner were not found in the cluster")]
     CloudProvisionerSecretNotFound,
 
+    #[error("The managed exit node spec does not have a password set")]
+    ManagedExitNodeNoPasswordSet,
+
+    #[error("The Secret could not be found in the resource's namespace")]
+    SecretNotFound,
+
+    #[error("The `auth` field is not set in the Secret intended for the password")]
+    AuthFieldNotSet,
+
     #[error("The operator has encountered an unknown error, this is most likely a bug: {0}")]
     UnknownError(#[from] color_eyre::Report),
 }

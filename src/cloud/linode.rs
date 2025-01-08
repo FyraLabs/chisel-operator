@@ -54,12 +54,9 @@ impl Provisioner for LinodeProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
-        let password = generate_password(32);
-
-        let _secret = exit_node.generate_secret(password.clone()).await?;
-
-        let config = generate_cloud_init_config(&password, exit_node.spec.port);
+        let config = generate_cloud_init_config(&node_password, exit_node.spec.port);
 
         // Okay, so apparently Linode uses base64 for user_data, so let's
         // base64 encode the config
@@ -87,7 +84,7 @@ impl Provisioner for LinodeProvisioner {
 
         let mut instance = api
             .create_instance(&self.region, &self.size)
-            .root_pass(&password)
+            .root_pass(&node_password)
             .label(&name)
             .user_data(&user_data)
             .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])
@@ -152,6 +149,7 @@ impl Provisioner for LinodeProvisioner {
         &self,
         auth: Secret,
         exit_node: ExitNode,
+        node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
         let api = LinodeApi::new(self.get_token(&auth).await?);
 
@@ -178,7 +176,7 @@ impl Provisioner for LinodeProvisioner {
             Ok(status)
         } else {
             warn!("No instance status found, creating new instance");
-            return self.create_exit_node(auth.clone(), exit_node).await;
+            return self.create_exit_node(auth.clone(), exit_node, node_password).await;
         }
     }
 }
