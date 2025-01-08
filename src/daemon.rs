@@ -26,7 +26,7 @@ use color_eyre::Result;
 use futures::{FutureExt, StreamExt};
 use k8s_openapi::api::{
     apps::v1::Deployment,
-    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Service, ServiceStatus},
+    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Secret, Service, ServiceStatus},
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
@@ -47,7 +47,7 @@ use std::time::Duration;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
-    cloud::Provisioner,
+    cloud::{pwgen::generate_password, Provisioner},
     ops::{
         parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
         EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL,
@@ -218,7 +218,7 @@ async fn select_exit_node_local(
 }
 
 #[instrument(skip(ctx))]
-/// Returns the ExitNode resource for a Service resource, either finding an existing one or creating a new one
+/// Generates or returns an ExitNode resource for a Service resource, either finding an existing one or creating a new one
 async fn exit_node_for_service(
     ctx: Arc<Context>,
     service: &Service,
@@ -258,7 +258,7 @@ async fn exit_node_for_service(
         return Ok(exit_node);
     }
 
-    let exit_node_tmpl = ExitNode {
+    let mut exit_node_tmpl = ExitNode {
         metadata: ObjectMeta {
             name: Some(exit_node_name.clone()),
             namespace: service.namespace(),
@@ -284,6 +284,11 @@ async fn exit_node_for_service(
         },
         status: None,
     };
+
+    let password = generate_password(32);
+    let secret = exit_node_tmpl.generate_secret(password.clone()).await?;
+
+    exit_node_tmpl.spec.auth = Some(secret.metadata.name.unwrap());
 
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
@@ -332,6 +337,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     let obj = svc.clone();
 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
+
     // Find service binding of svc name/namespace?
     let existing_node = node_list.iter().find(|node| {
         node.metadata
@@ -341,6 +347,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             .unwrap_or(false)
     });
 
+    // XXX: Exit node manifest generation starts here
     let node = {
         if let Some(node) = existing_node {
             node.clone()
@@ -523,13 +530,28 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
         return Ok(Action::await_change());
     } else if is_managed {
-        // XXX: What the fuck.
         let provisioner = obj
             .metadata
             .annotations
             .as_ref()
             .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
             .unwrap();
+
+        // We should assume that every managed exit node comes with an `auth` key, which is a reference to a Secret
+        // that contains the password for the exit node.
+        // If it doesn't exist, then it's probably bugged, and we should return and error
+        let node_password = {
+            let Some(ref node_password_secret_name) = obj.clone().spec.auth else {
+                return Err(ReconcileError::ManagedExitNodeNoPasswordSet);
+            };
+            let secrets_api = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
+            let secret: Secret = secrets_api.get(node_password_secret_name).await?;
+            let Some(node_password) = secret.data.as_ref().unwrap().get("auth") else {
+                return Err(ReconcileError::AuthFieldNotSet);
+            };
+            String::from_utf8_lossy(&node_password.0).to_string()
+        };
+
         trace!(?provisioner, "Provisioner");
         if let Some(status) = &obj.status {
             // Check for mismatch between annotation's provisioner and status' provisioner
@@ -592,7 +614,8 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
         let provisioner_api = provisioner.clone().spec.get_inner();
 
-        let secret = provisioner
+        // API key secret, do not use for node password
+        let api_key_secret = provisioner
             .find_secret()
             .await
             .map_err(|_| crate::error::ReconcileError::CloudProvisionerSecretNotFound)?
@@ -603,24 +626,26 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             EXIT_NODE_FINALIZER,
             obj.clone(),
             |event| async move {
-                let m: std::prelude::v1::Result<Action, crate::error::ReconcileError> = match event
-                {
+                let m: Result<_, crate::error::ReconcileError> = match event {
                     Event::Apply(node) => {
-                        let _node = {
+                        let _ = {
+                            // XXX: We should get the value of the Secret and pass it in as node_password
                             let cloud_resource = if let Some(_status) = node.status.as_ref() {
                                 info!("Updating cloud resource for {}", node.name_any());
                                 provisioner_api
-                                    .update_exit_node(secret.clone(), (*node).clone())
-                                    .await
+                                    .update_exit_node(api_key_secret.clone(), (*node).clone(), node_password)
+                                    .await?
                             } else {
                                 info!("Creating cloud resource for {}", node.name_any());
                                 provisioner_api
-                                    .create_exit_node(secret.clone(), (*node).clone())
-                                    .await
+                                    .create_exit_node(api_key_secret.clone(), (*node).clone(), node_password)
+                                    .await?
                             };
+
+                            // unwrap should be safe here since in k8s it is infallible for a Secret to not have a name
                             // TODO: Don't replace the entire status and object, sadly JSON is better here
                             let exitnode_patch = serde_json::json!({
-                                "status": cloud_resource?
+                                "status": cloud_resource,
                             });
 
                             exit_nodes
@@ -641,7 +666,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                         if is_managed {
                             info!("Deleting cloud resource for {}", node.name_any());
                             provisioner_api
-                                .delete_exit_node(secret, (*node).clone())
+                                .delete_exit_node(api_key_secret, (*node).clone())
                                 .await
                                 .unwrap_or_else(|e| {
                                     error!(?e, "Error deleting exit node {}", node.name_any())
@@ -650,7 +675,6 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                         Ok(Action::requeue(Duration::from_secs(3600)))
                     }
                 };
-
                 m
             },
         )
@@ -707,7 +731,7 @@ pub async fn run() -> color_eyre::Result<()> {
                     client: client.clone(),
                 }),
             )
-            .for_each(|_| futures::future::ready(()))
+            .for_each(|result_value| futures::future::ready(()))
             .boxed(),
     );
 
@@ -732,7 +756,7 @@ pub async fn run() -> color_eyre::Result<()> {
                 error_policy_exit_node,
                 Arc::new(Context { client }),
             )
-            .for_each(|_| futures::future::ready(()))
+            .for_each(|result_value| futures::future::ready(()))
             .boxed(),
     );
 

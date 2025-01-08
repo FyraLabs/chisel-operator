@@ -1,4 +1,4 @@
-pub fn generate_cloud_init_config(password: &str, port: u16) -> String {
+pub fn generate_cloud_init_config(auth_string: &str, port: u16) -> String {
     let cloud_config = serde_json::json!({
       "runcmd": ["curl https://i.jpillora.com/chisel! | bash", "systemctl enable --now chisel"],
       "write_files": [{
@@ -19,14 +19,14 @@ RestartSec=1
 User=root
 # You can add any additional flags here
 # This example uses port 9090 for the tunnel socket. `--reverse` is required for our use case.
-ExecStart=/usr/local/bin/chisel server --port={port} --reverse --auth chisel:{password}
+ExecStart=/usr/local/bin/chisel server --port={port} --reverse --auth {auth_string}
 # Additional .env file for auth and secrets
 EnvironmentFile=-/etc/sysconfig/chisel
 PassEnvironment=AUTH
 "#)
       }, {
         "path": "/etc/sysconfig/chisel",
-        "content": format!("AUTH=chisel:{}\n", password)
+        "content": format!("AUTH={auth_string}\n")
       }]
     });
 
