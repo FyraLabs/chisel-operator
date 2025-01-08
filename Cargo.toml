@@ -79,7 +79,7 @@ hyper-rustls = { version = "0.24.2", features = [
     "webpki-roots",
     "webpki-tokio",
 ] }
-itertools = "0.12.1"
+itertools = "0.14.0"
 # opentelemetry = { version = "0.18.0", features = ["trace", "rt-tokio"] }
 # opentelemetry-otlp = { version = "0.11.0", features = ["tokio"] }
 # tonic = { version = "0.8.3" }
