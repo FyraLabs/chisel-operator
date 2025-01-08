@@ -32,7 +32,7 @@ pub fn parse_provisioner_label_value<'a>(
     version = "v1",
     kind = "ExitNode",
     singular = "exitnode",
-    struct = "ExitNode",
+    // struct = "ExitNode",
     status = "ExitNodeStatus",
     namespaced
 )]
@@ -172,7 +172,7 @@ pub struct ServiceBinding {
     version = "v1",
     kind = "ExitNodeProvisioner",
     singular = "exitnodeprovisioner",
-    struct = "ExitNodeProvisioner",
+    // struct = "ExitNodeProvisioner",
     namespaced
 )]
 /// ExitNodeProvisioner is a custom resource that represents a Chisel exit node provisioner on a cloud provider.

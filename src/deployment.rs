@@ -202,7 +202,7 @@ pub async fn create_pod_template(
             name: "AUTH".to_string(),
             value_from: Some(EnvVarSource {
                 secret_key_ref: Some(SecretKeySelector {
-                    name: Some(secret_name),
+                    name: secret_name,
                     key: "auth".to_string(),
                     optional: Some(false),
                 }),
