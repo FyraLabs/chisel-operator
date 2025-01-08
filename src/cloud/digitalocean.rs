@@ -135,8 +135,10 @@ impl Provisioner for DigitalOceanProvisioner {
             provisioner.clone(),
             name.clone(),
             droplet_ip.clone(),
-            Some(&droplet_id),
+            Some(droplet_id),
         );
+        
+        debug!(?exit_node, "Created exit node!!");
 
         Ok(exit_node)
     }
