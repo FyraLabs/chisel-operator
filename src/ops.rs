@@ -147,13 +147,12 @@ impl ExitNodeStatus {
     // }
 
     // It is indeed being used in cloud/*
-    #[allow(unused_variables)]
-    pub fn new(provider: String, name: String, ip: String, id: Option<&str>) -> Self {
+    pub fn new(provider: String, name: String, ip: String, id: Option<String>) -> Self {
         Self {
             provider,
             name,
             ip,
-            id: None,
+            id,
             // service_binding: vec![],
         }
     }

@@ -44,7 +44,7 @@ use kube::{
 use std::{collections::BTreeMap, sync::Arc};
 
 use std::time::Duration;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::{
     cloud::Provisioner,
@@ -479,22 +479,20 @@ fn error_policy_exit_node(
     Action::requeue(Duration::from_secs(5))
 }
 const UNMANAGED_PROVISIONER: &str = "unmanaged";
+
 #[instrument(skip(ctx))]
 async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action, ReconcileError> {
     info!("exit node reconcile request: {}", obj.name_any());
-
     let is_managed = check_exit_node_managed(&obj).await;
-
     debug!(?is_managed, "exit node is managed by cloud provisioner?");
-
     let exit_nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
     // finalizer for exit node
-
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
     if !is_managed && obj.status.is_none() {
         // add status to exit node if it's not managed
+        // This is the case for self-hosted exit nodes (Manually )
 
         let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
 
@@ -525,12 +523,14 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
         return Ok(Action::await_change());
     } else if is_managed {
+        // XXX: What the fuck.
         let provisioner = obj
             .metadata
             .annotations
             .as_ref()
             .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
             .unwrap();
+        trace!(?provisioner, "Provisioner");
         if let Some(status) = &obj.status {
             // Check for mismatch between annotation's provisioner and status' provisioner
             if &status.provider != provisioner {

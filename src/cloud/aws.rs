@@ -219,7 +219,7 @@ impl Provisioner for AWSProvisioner {
             public_ip,
             // needless conversion?
             // todo: Clean this up, minor performance hit
-            instance.instance_id.map(|id| id.to_string()).as_deref(),
+            instance.instance_id,
         );
 
         Ok(exit_node)

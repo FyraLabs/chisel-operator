@@ -123,7 +123,7 @@ impl Provisioner for LinodeProvisioner {
             instance_ip,
             instance.label,
             provisioner.to_string(),
-            Some(&instance.id.to_string()),
+            Some(instance.id.to_string()),
         );
 
         Ok(status)
