@@ -57,5 +57,7 @@ spec:
   port: 9090
   # Name of the secret containing the auth key
   # Create a secret with a key named "auth" and put the value there
-  # auth: SECRET-NAME
+  # This value is now required for security reasons, if there's no secret
+  # Chisel Operator will fail.
+  auth: SECRET-NAME
 ```
