@@ -63,7 +63,6 @@ impl Provisioner for DigitalOceanProvisioner {
         exit_node: ExitNode,
         node_password: String,
     ) -> color_eyre::Result<ExitNodeStatus> {
-
         let config = generate_cloud_init_config(&node_password, exit_node.spec.port);
 
         // TODO: Secret reference, not plaintext

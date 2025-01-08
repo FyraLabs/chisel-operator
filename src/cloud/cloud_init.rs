@@ -39,5 +39,7 @@ fn test_generate_cloud_init_config() {
     let config = generate_cloud_init_config(password, 9090);
     println!("{}", config);
     assert!(config.contains("AUTH=chisel:test"));
-    assert!(config.contains("ExecStart=/usr/local/bin/chisel server --port=9090 --reverse --auth chisel:test"));
+    assert!(config.contains(
+        "ExecStart=/usr/local/bin/chisel server --port=9090 --reverse --auth chisel:test"
+    ));
 }
