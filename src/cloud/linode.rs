@@ -83,7 +83,9 @@ impl Provisioner for LinodeProvisioner {
         );
 
         // Since we now directly pass in the chisel auth string with the `chisel:` prefix, let's remove the prefix
-        let root_password = chisel_auth_string.strip_prefix("chisel:").unwrap_or(&chisel_auth_string);
+        let root_password = chisel_auth_string
+            .strip_prefix("chisel:")
+            .unwrap_or(&chisel_auth_string);
 
         let mut instance = api
             .create_instance(&self.region, &self.size)
@@ -179,7 +181,9 @@ impl Provisioner for LinodeProvisioner {
             Ok(status)
         } else {
             warn!("No instance status found, creating new instance");
-            return self.create_exit_node(auth.clone(), exit_node, node_password).await;
+            return self
+                .create_exit_node(auth.clone(), exit_node, node_password)
+                .await;
         }
     }
 }

@@ -633,12 +633,20 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
                             let cloud_resource = if let Some(_status) = node.status.as_ref() {
                                 info!("Updating cloud resource for {}", node.name_any());
                                 provisioner_api
-                                    .update_exit_node(api_key_secret.clone(), (*node).clone(), node_password)
+                                    .update_exit_node(
+                                        api_key_secret.clone(),
+                                        (*node).clone(),
+                                        node_password,
+                                    )
                                     .await?
                             } else {
                                 info!("Creating cloud resource for {}", node.name_any());
                                 provisioner_api
-                                    .create_exit_node(api_key_secret.clone(), (*node).clone(), node_password)
+                                    .create_exit_node(
+                                        api_key_secret.clone(),
+                                        (*node).clone(),
+                                        node_password,
+                                    )
                                     .await?
                             };
 
