@@ -74,6 +74,9 @@ pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
 // this is actually used to pass clients around
 pub struct Context {
     pub client: Client,
+    // Let's implement a lock here to prevent multiple reconciles assigning the same exit node
+    // to multiple services implicitly (#143)
+    pub exit_node_lock: tokio::sync::Mutex<()>,
 }
 
 /// Parses the `query` string to extract the namespace and name.
@@ -167,9 +170,11 @@ const OPERATOR_MANAGER: &str = "chisel-operator";
 
 #[instrument(skip(ctx))]
 async fn select_exit_node_local(
-    ctx: Arc<Context>,
+    ctx: &Arc<Context>,
     service: &Service,
 ) -> Result<ExitNode, ReconcileError> {
+    // Lock to prevent race conditions when assigning exit nodes to services
+    let _lock = ctx.exit_node_lock.lock().await;
     // if service has label with exit node name, use that and error if not found
     if let Some(exit_node_name) = service
         .metadata
@@ -369,7 +374,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         // Else, use the first available exit node
         // Fails if there's no empty exit node available
         else {
-            select_exit_node_local(ctx.clone(), &obj).await?
+            select_exit_node_local(&ctx, &obj).await?
         }
     };
 
@@ -716,6 +721,7 @@ pub async fn run() -> color_eyre::Result<()> {
     // TODO: figure out how to do this in a single controller because there is a potential race where the exit node reconciler runs at the same time as the service one
     // This is an issue because both of these functions patch the status of the exit node
     // or if we can figure out a way to atomically patch the status of the exit node, that could be fine too, since both ops are just updates anyways lmfao
+    // NOTE: Maybe we could use a lock to prevent this. This will be implemented only for local exit nodes for now.
 
     reconcilers.push(
         Controller::new(services, Config::default())
@@ -737,6 +743,7 @@ pub async fn run() -> color_eyre::Result<()> {
                 error_policy,
                 Arc::new(Context {
                     client: client.clone(),
+                    exit_node_lock: tokio::sync::Mutex::new(()),
                 }),
             )
             .for_each(|_| futures::future::ready(()))
@@ -762,7 +769,10 @@ pub async fn run() -> color_eyre::Result<()> {
             .run(
                 reconcile_nodes,
                 error_policy_exit_node,
-                Arc::new(Context { client }),
+                Arc::new(Context {
+                    client,
+                    exit_node_lock: tokio::sync::Mutex::new(()),
+                }),
             )
             .for_each(|_| futures::future::ready(()))
             .boxed(),
