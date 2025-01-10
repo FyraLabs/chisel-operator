@@ -54,11 +54,19 @@ async fn main() -> Result<()> {
 
     let logfmt_logger = tracing_logfmt::layer().boxed();
 
-    let pretty_logger = tracing_subscriber::fmt::layer().pretty().boxed();
+    let pretty_logger = tracing_subscriber::fmt::layer()
+        .pretty()
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .boxed();
 
     let json_logger = tracing_subscriber::fmt::layer().json().boxed();
 
-    let compact_logger = tracing_subscriber::fmt::layer().compact().boxed();
+    let compact_logger = tracing_subscriber::fmt::layer()
+        .compact()
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .boxed();
 
     let logger = match logger_env.as_str() {
         "logfmt" => logfmt_logger,

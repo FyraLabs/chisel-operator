@@ -8,6 +8,9 @@ pub enum ReconcileError {
     #[error("There are no exit nodes available to assign")]
     NoAvailableExitNodes,
 
+    #[error("Exit Node being already assigned and its backoff time has not expired")]
+    ExitNodeBackoff,
+
     #[error("There are no ports set on this LoadBalancer")]
     NoPortsSet,
 

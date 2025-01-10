@@ -13,7 +13,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
 use kube::{api::ResourceExt, core::ObjectMeta, error::ErrorResponse, Resource};
-use tracing::{debug, info, instrument};
+use tracing::{info, instrument, trace};
 
 const CHISEL_IMAGE: &str = "jpillora/chisel";
 
@@ -69,7 +69,7 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 
     let host = node.get_host();
 
-    debug!(host = ?host, "Host");
+    trace!(host = ?host, "Host");
 
     // Determine if the host is an IPv6 address and format accordingly
     let formatted_host = match host.parse::<IpAddr>() {
@@ -78,7 +78,7 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
     };
 
     let output = format!("{}:{}", formatted_host, node.spec.port);
-    debug!(output = ?output, "Output");
+    trace!(output = ?output, "Output");
     output
 }
 
@@ -134,7 +134,7 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
         .collect();
 
     info!("Generated arguments: {:?}", ports);
-    debug!(svc = ?svc, "Source service");
+    trace!(svc = ?svc, "Source service");
     Ok(ports)
 }
 
