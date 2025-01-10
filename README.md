@@ -116,7 +116,11 @@ Or if you would like to go straight to the latest commit:
 kubectl apply -k https://github.com/FyraLabs/chisel-operator
 ```
 
-A Helm chart will be available soon.
+A Helm chart is also available as an OCI artifact. You can install it using the following command:
+
+```bash
+helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-operator
+```
 
 ## Usage
 
