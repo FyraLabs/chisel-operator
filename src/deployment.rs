@@ -178,7 +178,7 @@ pub fn generate_chisel_flags(node: &ExitNode) -> Vec<String> {
 /// Returns:
 ///
 /// a `PodTemplateSpec` object.
-#[instrument]
+#[instrument(skip(source, exit_node))]
 pub async fn create_pod_template(
     source: &Service,
     exit_node: &ExitNode,
@@ -254,7 +254,7 @@ pub async fn create_pod_template(
 /// Returns:
 ///
 /// a `Deployment` object.
-#[instrument]
+#[instrument(skip(source, exit_node))]
 pub async fn create_owned_deployment(
     source: &Service,
     exit_node: &ExitNode,

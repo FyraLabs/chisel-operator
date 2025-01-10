@@ -97,5 +97,15 @@ async fn main() -> Result<()> {
     );
     info!("Starting up...");
 
+    // Set up a handler for graceful pod termination
+    tokio::spawn(async move {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .unwrap()
+            .recv()
+            .await;
+        info!("Received termination signal, shutting down...");
+        std::process::exit(0);
+    });
+
     daemon::run().await
 }
