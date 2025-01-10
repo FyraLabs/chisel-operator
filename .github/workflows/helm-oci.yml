@@ -17,7 +17,7 @@ on:
 
 jobs:
   docker:
-    if: github.event_name == 'push' && contains(github.ref, 'refs/tags/v')
+    if: contains(github.ref, 'refs/tags/v') || contains(github.ref, 'refs/heads/stable') 
     permissions:
       contents: read
       packages: write
