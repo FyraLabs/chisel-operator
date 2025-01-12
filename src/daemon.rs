@@ -213,6 +213,16 @@ async fn select_exit_node_local(
             return Err(ReconcileError::NoAvailableExitNodes);
         }
     };
+
+    let already_bound_exit_node =
+        crate::util::get_svc_bound_exit_node(ctx.clone(), service).await?;
+
+    if let Some(node) = already_bound_exit_node {
+        info!("Service already bound to an exit node, using that now");
+        *lock = Some((std::time::Instant::now(), node.get_host()));
+        return Ok(node);
+    }
+
     // if service has label with exit node name, use that and error if not found
     let exit_node_selection = {
         if let Some(exit_node_name) = service
@@ -408,42 +418,14 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     let services: Api<Service> = Api::namespaced(ctx.client.clone(), &obj.namespace().unwrap());
     let nodes: Api<ExitNode> = Api::all(ctx.client.clone());
 
-    // --- Let's skip reconciling services whose exit node IP addresses still exit in the cluster
-    // only list IP addresses of exit nodes
-    let nodes_by_ip: BTreeMap<String, ExitNode> = nodes
-        .list(&ListParams::default().timeout(30))
-        .await?
-        .items
-        .into_iter()
-        .filter_map(|node| {
-            let host = node.get_host();
-            if let Some(_status) = &node.status {
-                Some((host, node))
-            } else {
-                None
-            }
-        })
-        .collect();
-
     let mut svc = services.get_status(&obj.name_any()).await?;
-
-    let svc_lb_ip = svc
-        .status
-        .as_ref()
-        .and_then(|status| status.load_balancer.as_ref())
-        .and_then(|lb| lb.ingress.as_ref())
-        .and_then(|ingress| ingress.first())
-        .and_then(|ingress| ingress.ip.clone())
-        .unwrap_or_default();
-
-    let existing_bound_node = nodes_by_ip.get(&svc_lb_ip);
 
     let obj = svc.clone();
 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
 
     // Find service binding of svc name/namespace?
-    let existing_node = node_list.iter().find(|node| {
+    let named_exit_node = node_list.iter().find(|node| {
         node.metadata
             .annotations
             .as_ref()
@@ -453,9 +435,11 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     // XXX: Exit node manifest generation starts here
     let node = {
-        if let Some(node) = existing_node {
+        if let Some(node) = named_exit_node {
+            info!("Service explicitly set to use a named exit node, using that now");
             node.clone()
         } else if check_service_managed(&obj).await {
+            info!("Service is managed by a cloud provider, Resolving exit node...");
             // Remove attached exit node if the service was managed by a cloud provider and when it is removed
             let mut exit_node = exit_node_for_service(ctx.clone(), &obj).await?;
 
@@ -466,15 +450,8 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             }
 
             exit_node
-        }
-        // If a service *specifically* chooses a named exit node, use that one
-        // Allows support for multiple services to use the same exit node
-
-        // Else, use the first available exit node
-        // Fails if there's no empty exit node available
-        else if let Some(node) = existing_bound_node {
-            node.clone()
         } else {
+            info!("Selecting an exit node for the service");
             select_exit_node_local(&ctx, &obj).await?
         }
     };
