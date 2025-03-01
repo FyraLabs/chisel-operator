@@ -42,7 +42,7 @@ tracing = { version = "0.1", features = ["log", "async-await"] }
 color-eyre = "0.6"
 schemars = "0.8"
 futures = "0.3"
-thiserror = "1.0"
+thiserror = "2.0"
 # pretty_env_logger = "0.5.0"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 tracing-logfmt = "0.3.4"
