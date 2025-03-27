@@ -14,6 +14,7 @@ use tracing::debug;
 
 pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
 pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provisioner";
+pub const EXIT_NODE_PROXY_PROTOCOL_LABEL: &str = "chisel-operator.io/proxy-protocol";
 
 pub fn parse_provisioner_label_value<'a>(
     default_namespace: &'a str,
