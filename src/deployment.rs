@@ -1,6 +1,9 @@
 //! Chisel pod deployment
 
-use crate::{error::ReconcileError, ops::ExitNode};
+use crate::{
+    error::ReconcileError,
+    ops::{ExitNode, EXIT_NODE_PROXY_PROTOCOL_LABEL},
+};
 use color_eyre::Result;
 use k8s_openapi::{
     api::{
@@ -110,7 +113,12 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
     //     .flatten()
     //     .unwrap_or_else(|| "R".to_string());
 
-    let target_ip = "R";
+    let proxy_protocol = svc.metadata.annotations.as_ref().and_then(|annotations| {
+        annotations
+            .get(EXIT_NODE_PROXY_PROTOCOL_LABEL)
+            .map(String::as_ref)
+    }) == Some("true");
+    let target_ip = if proxy_protocol { "RP" } else { "R" };
 
     // We can unwrap safely since Service is guaranteed to have a spec
     let ports = svc
