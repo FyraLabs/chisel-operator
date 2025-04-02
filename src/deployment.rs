@@ -113,14 +113,11 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
     //     .flatten()
     //     .unwrap_or_else(|| "R".to_string());
 
-    let proxy_protocol = svc
-        .metadata
-        .annotations
-        .as_ref()
-        .map_or(false, |annotations| {
-            annotations.get(EXIT_NODE_PROXY_PROTOCOL_LABEL) == Some(&"true".to_string())
-        });
-
+    let proxy_protocol = svc.metadata.annotations.as_ref().and_then(|annotations| {
+        annotations
+            .get(EXIT_NODE_PROXY_PROTOCOL_LABEL)
+            .map(String::as_ref)
+    }) == Some("true");
     let target_ip = if proxy_protocol { "RP" } else { "R" };
 
     // We can unwrap safely since Service is guaranteed to have a spec
