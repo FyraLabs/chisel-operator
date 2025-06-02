@@ -40,7 +40,7 @@ dotenvy = "0.15"
 tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1", features = ["log", "async-await"] }
 color-eyre = "0.6"
-schemars = "0.8"
+schemars = "0.9"
 futures = "0.3"
 thiserror = "1.0"
 # pretty_env_logger = "0.5.0"
