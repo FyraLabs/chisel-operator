@@ -42,8 +42,17 @@ pub fn parse_provisioner_label_value<'a>(
 pub struct ExitNodeSpec {
     /// Hostname or IP address of the chisel server
     pub host: String,
-    /// Optional real external hostname/IP of exit node
-    /// If not provided, the host field will be used
+    /// Optional real external hostname or IP of the exit node.
+    ///
+    /// This field is used to explicitly specify the public-facing endpoint for the exit node.
+    /// If set to an IP address, it will be used as the `ip` field in the Service's
+    /// `status.loadBalancer.ingress`, which is what external-dns and other automation
+    /// will use to create DNS records or inform users of the external endpoint.
+    /// If set to a DNS name, it will be used as the `hostname` field in the same struct.
+    ///
+    /// This is useful when the exit node is only reachable via a specific external IP or
+    /// hostname, even if the internal service is routed to a private address.
+    /// If not provided, the value of the `host` field will be used instead.
     #[serde(default)]
     pub external_host: Option<String>,
     /// Control plane port of the chisel server
@@ -83,6 +92,15 @@ impl ExitNode {
             Some(status) => status.ip.clone(),
             None => self.spec.host.clone(),
         }
+    }
+
+    /// returns the external host for use in LoadBalancer Ingress hostname
+    /// if external_host is set, use that, otherwise use get_host()
+    pub fn get_external_host(&self) -> String {
+        self.spec
+            .external_host
+            .clone()
+            .unwrap_or_else(|| self.get_host())
     }
 
     /// For cloud provisioning:
