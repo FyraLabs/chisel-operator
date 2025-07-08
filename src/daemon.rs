@@ -472,7 +472,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // but we do want to properly set up the LoadBalancer status properly
     let (ingress_ip, ingress_hostname) = if !external_host.is_empty() {
         if external_host.parse::<std::net::IpAddr>().is_ok() {
-
             // If the external host is a valid IP address, use it
             (Some(external_host), None)
         } else {
@@ -480,7 +479,6 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
             (None, Some(external_host))
         }
     } else {
-
         // or if we don't have an external hostname configured, just use the IP
         (Some(exit_node_ip.clone()), None)
     };
