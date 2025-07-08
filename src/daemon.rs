@@ -466,11 +466,30 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     let serverside = PatchParams::apply(OPERATOR_MANAGER).validation_strict();
 
+    let external_host = node.get_external_host();
+
+    // this is kinda hard to read,
+    // but we do want to properly set up the LoadBalancer status properly
+    let (ingress_ip, ingress_hostname) = if !external_host.is_empty() {
+        if external_host.parse::<std::net::IpAddr>().is_ok() {
+
+            // If the external host is a valid IP address, use it
+            (Some(external_host), None)
+        } else {
+            // if not an IP address, use it as a hostname
+            (None, Some(external_host))
+        }
+    } else {
+
+        // or if we don't have an external hostname configured, just use the IP
+        (Some(exit_node_ip.clone()), None)
+    };
+
     svc.status = Some(ServiceStatus {
         load_balancer: Some(LoadBalancerStatus {
             ingress: Some(vec![LoadBalancerIngress {
-                ip: Some(exit_node_ip.clone()),
-                // hostname: Some(node.get_external_host()),
+                ip: ingress_ip,
+                hostname: ingress_hostname,
                 ..Default::default()
             }]),
         }),
