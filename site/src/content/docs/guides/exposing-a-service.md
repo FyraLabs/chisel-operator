@@ -26,6 +26,30 @@ spec:
 As you can see, the type of this service is `LoadBalancer`, which is required for chisel-operator to pick up on the service.
 Note that Chisel Operator acts on all LoadBalancer services in the cluster by default.
 
+## Limiting reconciliation to a LoadBalancer class
+
+If you only want the operator to manage services that opt in to a specific load balancer class, you can set the `LOAD_BALANCER_CLASS` environment variable (or the `loadBalancerClass` Helm value) when deploying it.
+Once the operator is running with that filter, only services whose `spec.loadBalancerClass` matches the configured class name will be reconciled; other services are ignored.
+
+To opt a service in, add the same `loadBalancerClass` to the Service spec:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+spec:
+  type: LoadBalancer
+  loadBalancerClass: my.chisel.class
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+```
+
+Leaving the value empty (or omitting the field) continues to expose the service through any unfiltered operator instance.
+
 Additionally, there's also a commented out annotation, `chisel-operator.io/exit-node-name`.
 By default, Chisel Operator will automatically select a random, unused `ExitNode` on the cluster if a cloud provisioner or exit node annotation is not set.
 If you'd like to force the service to a particular exit node, you can uncomment out the annotation, setting it to the name of the `ExitNode` to target.

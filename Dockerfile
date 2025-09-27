@@ -1,16 +1,22 @@
-FROM rust:latest AS build-env
-RUN apt update
-RUN apt install -y libssl-dev mold
+FROM docker.io/library/rust:1.89.0-slim-trixie AS build-env
+
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev clang mold git
+
 WORKDIR /app
 COPY . /app
+
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
-ENV RUSTFLAGS="-C link-arg=-B/usr/bin/mold"
-# copy build artifact somewhere accessible so we can copy it in the next stage
-RUN --mount=type=cache,target=/root/.cargo \
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
     cargo build --release
 
-FROM redhat/ubi9-micro:latest
-# RUN useradd -u 1001 chisel
-USER 1001
-COPY --from=build-env --chown=chisel /app/target/release/chisel-operator /usr/bin/chisel-operator
+FROM docker.io/library/debian:trixie-slim
+
+RUN groupadd -r chisel && useradd -r -g chisel -d /chisel -s /usr/sbin/nologin chisel
+USER chisel
+
+COPY --from=build-env --chown=chisel:chisel /app/target/release/chisel-operator /usr/bin/chisel-operator
 CMD ["chisel-operator"]

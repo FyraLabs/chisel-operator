@@ -26,7 +26,9 @@ use color_eyre::Result;
 use futures::{FutureExt, StreamExt};
 use k8s_openapi::api::{
     apps::v1::Deployment,
-    core::v1::{LoadBalancerIngress, LoadBalancerStatus, Secret, Service, ServiceStatus},
+    core::v1::{
+        LoadBalancerIngress, LoadBalancerStatus, Secret, Service, ServiceSpec, ServiceStatus,
+    },
 };
 use kube::{
     api::{Api, ListParams, Patch, PatchParams, ResourceExt},
@@ -41,7 +43,7 @@ use kube::{
     },
     Client, Resource,
 };
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, env, sync::Arc};
 
 use std::time::Duration;
 use tracing::{debug, error, info, instrument, trace, warn};
@@ -71,12 +73,48 @@ pub const SVCS_FINALIZER: &str = "service.chisel-operator.io/finalizer";
 //         .trace_id()
 // }
 
+#[derive(Clone, Debug, Default)]
+pub struct OperatorConfig {
+    pub load_balancer_class: Option<String>,
+}
+
+impl OperatorConfig {
+    fn from_env() -> Self {
+        let load_balancer_class = env::var("LOAD_BALANCER_CLASS").ok().and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
+
+        Self {
+            load_balancer_class,
+        }
+    }
+}
+
+fn service_matches_operator_class(spec: &ServiceSpec, operator_config: &OperatorConfig) -> bool {
+    let lb_class = spec.load_balancer_class.as_deref();
+
+    if let Some(expected_class) = operator_config.load_balancer_class.as_deref() {
+        return lb_class == Some(expected_class);
+    }
+
+    match lb_class {
+        None => true,
+        Some(class_name) => class_name == OPERATOR_CLASS,
+    }
+}
+
 // this is actually used to pass clients around
 pub struct Context {
     pub client: Client,
     // Let's implement a lock here to prevent multiple reconciles assigning the same exit node
     // to multiple services implicitly (#143)
     pub exit_node_lock: Arc<tokio::sync::Mutex<Option<(std::time::Instant, String)>>>,
+    pub operator_config: OperatorConfig,
 }
 
 /// Parses the `query` string to extract the namespace and name.
@@ -395,20 +433,32 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     // Return if service is not LoadBalancer or if the loadBalancerClass is not blank or set to $OPERATOR_CLASS
 
     // todo: is there anything different need to be done for OpenShift? We use vanilla k8s and k3s/rke2 so we don't know
-    if obj
-        .spec
-        .as_ref()
-        .filter(|spec| spec.type_ == Some("LoadBalancer".to_string()))
-        .is_none()
-        || obj
-            .spec
-            .as_ref()
-            .filter(|spec| {
-                spec.load_balancer_class.is_none()
-                    || spec.load_balancer_class == Some(OPERATOR_CLASS.to_string())
-            })
-            .is_none()
-    {
+    let Some(spec) = obj.spec.as_ref() else {
+        return Ok(Action::await_change());
+    };
+
+    if spec.type_.as_deref() != Some("LoadBalancer") {
+        return Ok(Action::await_change());
+    }
+
+    let operator_config = &ctx.operator_config;
+    if !service_matches_operator_class(spec, operator_config) {
+        let lb_class = spec.load_balancer_class.as_deref();
+        if let Some(expected_class) = operator_config.load_balancer_class.as_deref() {
+            trace!(
+                service = obj.name_any(),
+                ?lb_class,
+                expected = expected_class,
+                "Skipping service due to loadBalancerClass filter"
+            );
+        } else if let Some(class_name) = lb_class {
+            trace!(
+                service = obj.name_any(),
+                loadBalancerClass = class_name,
+                "Skipping service due to mismatched loadBalancerClass"
+            );
+        }
+
         return Ok(Action::await_change());
     }
 
@@ -812,6 +862,16 @@ pub async fn run() -> color_eyre::Result<()> {
     let mut reconcilers = vec![];
 
     let lock = Arc::new(tokio::sync::Mutex::new(None));
+    let operator_config = OperatorConfig::from_env();
+
+    if let Some(class_name) = operator_config.load_balancer_class.as_deref() {
+        info!(
+            loadBalancerClass = class_name,
+            "Filtering LoadBalancer services by class"
+        );
+    } else {
+        info!("No loadBalancerClass filter configured; reconciling services without restriction");
+    }
 
     info!("Starting reconcilers...");
 
@@ -841,6 +901,7 @@ pub async fn run() -> color_eyre::Result<()> {
                 Arc::new(Context {
                     client: client.clone(),
                     exit_node_lock: lock.clone(),
+                    operator_config: operator_config.clone(),
                 }),
             )
             .for_each(|_| futures::future::ready(()))
@@ -869,6 +930,7 @@ pub async fn run() -> color_eyre::Result<()> {
                 Arc::new(Context {
                     client,
                     exit_node_lock: lock,
+                    operator_config,
                 }),
             )
             .for_each(|_| futures::future::ready(()))
@@ -878,4 +940,61 @@ pub async fn run() -> color_eyre::Result<()> {
     futures::future::join_all(reconcilers).await;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_service_spec(class: Option<&str>) -> ServiceSpec {
+        ServiceSpec {
+            type_: Some("LoadBalancer".to_string()),
+            load_balancer_class: class.map(|c| c.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn helper_accepts_unclassified_services_without_filter() {
+        let spec = make_service_spec(None);
+        let config = OperatorConfig::default();
+
+        assert!(service_matches_operator_class(&spec, &config));
+    }
+
+    #[test]
+    fn helper_accepts_operator_class_without_filter() {
+        let spec = make_service_spec(Some(OPERATOR_CLASS));
+        let config = OperatorConfig::default();
+
+        assert!(service_matches_operator_class(&spec, &config));
+    }
+
+    #[test]
+    fn helper_rejects_other_class_without_filter() {
+        let spec = make_service_spec(Some("other.class"));
+        let config = OperatorConfig::default();
+
+        assert!(!service_matches_operator_class(&spec, &config));
+    }
+
+    #[test]
+    fn helper_accepts_matching_explicit_filter() {
+        let spec = make_service_spec(Some("custom.class"));
+        let config = OperatorConfig {
+            load_balancer_class: Some("custom.class".to_string()),
+        };
+
+        assert!(service_matches_operator_class(&spec, &config));
+    }
+
+    #[test]
+    fn helper_rejects_when_filter_set_and_class_missing() {
+        let spec = make_service_spec(None);
+        let config = OperatorConfig {
+            load_balancer_class: Some("custom.class".to_string()),
+        };
+
+        assert!(!service_matches_operator_class(&spec, &config));
+    }
 }

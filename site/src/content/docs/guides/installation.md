@@ -32,4 +32,12 @@ You can configure the helm chart values by creating a `values.yaml` file and pas
 helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-operator -f values.yaml
 ```
 
+For example, to limit reconciliation to services that declare a custom load balancer class, set the `loadBalancerClass` value to the class name you want the operator to handle:
+
+```yaml
+loadBalancerClass: my.chisel.class
+```
+
+Make sure every Service you expect the operator to manage sets the same value in `spec.loadBalancerClass`.
+
 See [the Helm chart directory](https://github.com/FyraLabs/chisel-operator/tree/main/charts/chisel-operator) for more information on the Helm chart.

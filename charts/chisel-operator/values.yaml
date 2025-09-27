@@ -47,5 +47,9 @@ tolerations: []
 
 affinity: {}
 
+# Optional load balancer class handled by the operator. When empty, all LoadBalancer
+# services are reconciled, matching the default behavior.
+loadBalancerClass: ""
+
 # Create CRDs for Chisel Operator
 createCrds: true

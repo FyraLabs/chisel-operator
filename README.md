@@ -124,6 +124,22 @@ helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-opera
 
 ## Usage
 
+### Restricting reconciliation to a LoadBalancer class
+
+By default the operator watches every Kubernetes service of type `LoadBalancer`. If you only want it to manage services that target a specific [`loadBalancerClass`](https://kubernetes.io/docs/concepts/services-networking/service/#load-balancer-class), set the `LOAD_BALANCER_CLASS` environment variable (or the `loadBalancerClass` Helm value) to the class name you want the operator to handle. Only services whose `spec.loadBalancerClass` matches that string will be reconciled; other services will be ignored.
+
+When deploying a filtered operator you must also add the same `loadBalancerClass` to each Service you expect it to control:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+spec:
+  type: LoadBalancer
+  loadBalancerClass: my.chisel.class
+```
+
 ### Operator-managed exit nodes
 
 This operator can automatically provision exit nodes on cloud providers.
