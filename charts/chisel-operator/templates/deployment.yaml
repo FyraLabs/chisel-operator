@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: {{ include "chisel-operator.fullname" . }}
   labels:
-    name: {{- include "chisel-operator.labels" . | nindent 4 }}
+    {{- include "chisel-operator.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount}}
   selector:
