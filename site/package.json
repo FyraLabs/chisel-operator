@@ -14,6 +14,6 @@
     "astro": "^4.16.18",
     "sharp": "^0.33.5",
     "@astrojs/check": "^0.8.1",
-    "typescript": "^5.4.4"
+    "typescript": "^5.9.3"
   }
 }
