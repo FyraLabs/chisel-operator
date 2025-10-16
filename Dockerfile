@@ -9,9 +9,7 @@ COPY . /app
 ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    cargo build --release
+RUN cargo build --release
 
 FROM docker.io/library/debian:trixie-slim
 
