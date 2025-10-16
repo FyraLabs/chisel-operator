@@ -201,7 +201,7 @@ pub enum ExitNodeProvisionerSpec {
 }
 
 impl ExitNodeProvisionerSpec {
-    pub fn get_inner(self) -> Box<(dyn Provisioner + Send + Sync)> {
+    pub fn get_inner(self) -> Box<dyn Provisioner + Send + Sync> {
         // Can we somehow not have to match on this?
         match self {
             ExitNodeProvisionerSpec::DigitalOcean(a) => Box::new(a),
