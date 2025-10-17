@@ -10,7 +10,7 @@ on:
       
     branches: ["main", "stable"]
     # Publish semver tags as releases.
-    # tags: ["v*.*.*"]
+    tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
