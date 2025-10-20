@@ -65,7 +65,7 @@ aws-sdk-ec2 = { version = "1.13.0", default-features = false, features = [
     "rt-tokio",
     "behavior-version-latest",
 ] }
-aws-sdk-ssm = { version = "1.49.0", default-features = false, features = [
+aws-sdk-ssm = { version = "1.97.0", default-features = false, features = [
     "rt-tokio",
     "behavior-version-latest",
 ] }
