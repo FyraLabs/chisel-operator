@@ -244,7 +244,8 @@ mod tests {
 
     #[test]
     fn test_parse_provisioner_label_value_with_namespace() {
-        let (namespace, name) = parse_provisioner_label_value("default", "kube-system/cappy-chisel");
+        let (namespace, name) =
+            parse_provisioner_label_value("default", "kube-system/cappy-chisel");
         assert_eq!(namespace, "kube-system");
         assert_eq!(name, "cappy-chisel");
     }
