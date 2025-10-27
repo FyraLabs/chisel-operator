@@ -7,17 +7,21 @@ on:
     paths:
       - "charts/**"
       - ".github/workflows/helm-oci.yml"
-      
+
     branches: ["main", "stable"]
     # Publish semver tags as releases.
     tags: ["v*.*.*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (required for workflow_dispatch)"
+        required: true
 
 jobs:
   docker:
-    if: contains(github.ref, 'refs/tags/v') || contains(github.ref, 'refs/heads/stable') 
+    if: contains(github.ref, 'refs/tags/v') || contains(github.ref, 'refs/heads/stable') || github.event_name == 'workflow_dispatch'
     permissions:
       contents: read
       packages: write
@@ -27,15 +31,14 @@ jobs:
     # uses: appany/helm-oci-chart-releaser@v0.3.0
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: appany/helm-oci-chart-releaser@v0.3.0
-      with:
-        name: chisel-operator
-        repository: fyralabs/chisel-operator
-        tag: 0.6.0
-        path: charts/chisel-operator
-        registry: ghcr.io
-        registry_username: ${{ github.actor }}
-        registry_password: ${{ secrets.GITHUB_TOKEN }}
-        # update_dependencies: true
-
+      - uses: actions/checkout@v2
+      - uses: appany/helm-oci-chart-releaser@v0.3.0
+        with:
+          name: chisel-operator
+          repository: fyralabs/chisel-operator
+          tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          path: charts/chisel-operator
+          registry: ghcr.io
+          registry_username: ${{ github.actor }}
+          registry_password: ${{ secrets.GITHUB_TOKEN }}
+          # update_dependencies: true
