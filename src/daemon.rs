@@ -474,14 +474,24 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
 
-    // Find service binding of svc name/namespace?
-    let named_exit_node = node_list.iter().find(|node| {
-        node.metadata
-            .annotations
-            .as_ref()
-            .map(|annotations| annotations.contains_key(EXIT_NODE_NAME_LABEL))
-            .unwrap_or(false)
-    });
+    // Check if service has explicitly set an exit node name
+    let named_exit_node = obj
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
+        .and_then(|exit_node_name| {
+            // Parse the exit node name, which can be in the format "namespace/name" or just "name"
+            let service_namespace = obj.namespace().unwrap();
+            let (target_namespace, target_name) =
+                parse_provisioner_label_value(&service_namespace, exit_node_name);
+
+            // Find the exit node with the matching name and namespace
+            node_list.iter().find(|node| {
+                node.metadata.name.as_deref() == Some(target_name)
+                    && node.metadata.namespace.as_deref() == Some(target_namespace)
+            })
+        });
 
     // XXX: Exit node manifest generation starts here
     let node = {

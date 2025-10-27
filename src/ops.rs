@@ -237,3 +237,29 @@ impl ExitNodeProvisioner {
         Ok(Some(secret))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_provisioner_label_value_with_namespace() {
+        let (namespace, name) = parse_provisioner_label_value("default", "kube-system/cappy-chisel");
+        assert_eq!(namespace, "kube-system");
+        assert_eq!(name, "cappy-chisel");
+    }
+
+    #[test]
+    fn test_parse_provisioner_label_value_without_namespace() {
+        let (namespace, name) = parse_provisioner_label_value("default", "cappy-chisel");
+        assert_eq!(namespace, "default");
+        assert_eq!(name, "cappy-chisel");
+    }
+
+    #[test]
+    fn test_parse_provisioner_label_value_with_different_default_namespace() {
+        let (namespace, name) = parse_provisioner_label_value("my-namespace", "exit-node-1");
+        assert_eq!(namespace, "my-namespace");
+        assert_eq!(name, "exit-node-1");
+    }
+}
