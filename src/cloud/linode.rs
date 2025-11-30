@@ -92,7 +92,7 @@ impl Provisioner for LinodeProvisioner {
             .root_pass(root_password)
             .label(&name)
             .user_data(&user_data)
-            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])
+            .tags(vec![format!("chisel-operator-provisioner:{provisioner}")])
             .image(IMAGE_ID)
             .booted(true)
             .run_async()
@@ -143,7 +143,7 @@ impl Provisioner for LinodeProvisioner {
         // okay, so Linode IDs will be u64, so let's parse it
 
         if let Some(instance_id) = instance_id {
-            info!("Deleting Linode instance with ID {}", instance_id);
+            info!("Deleting Linode instance with ID {instance_id}");
             api.delete_instance_async(instance_id).await?;
         }
 

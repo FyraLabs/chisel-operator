@@ -379,7 +379,7 @@ async fn exit_node_for_service(
         .and_then(|annotations| annotations.get(EXIT_NODE_NAME_ANNOTATION))
         .unwrap_or({
             let service_name = service.metadata.name.as_ref().unwrap();
-            &format!("service-{}", service_name)
+            &format!("service-{service_name}")
         })
         .to_owned();
 
@@ -652,7 +652,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     .map_err(|e| {
         crate::error::ReconcileError::KubeError(kube::Error::Api(kube::error::ErrorResponse {
             code: 500,
-            message: format!("Error applying finalizer for {}", obj.name_any()),
+            message: "Error applying finalizer".to_string(),
             reason: e.to_string(),
             status: "Failure".to_string(),
         }))

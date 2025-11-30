@@ -82,11 +82,11 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 
     // Determine if the host is an IPv6 address and format accordingly
     let formatted_host = match host.parse::<IpAddr>() {
-        Ok(IpAddr::V6(_)) => format!("[{}]", host),
+        Ok(IpAddr::V6(_)) => format!("[{host}]"),
         _ => host.to_string(),
     };
 
-    let output = format!("{}:{}", formatted_host, node.spec.port);
+    let output = format!("{formatted_host}:{}", node.spec.port);
     trace!(output = ?output, "Output");
     output
 }
@@ -131,10 +131,7 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
             // The target port is what we expose externally and what the backend listens on
             let target_port = get_target_port(p);
             let protocol = get_protocol_suffix(p);
-            format!(
-                "{}:{}:{}:{}{}",
-                target_ip, target_port, cluster_ip, target_port, protocol
-            )
+            format!("{target_ip}:{target_port}:{cluster_ip}:{target_port}{protocol}")
         })
         .collect();
 
@@ -286,10 +283,10 @@ pub async fn create_owned_deployment(
 
     Ok(Deployment {
         metadata: ObjectMeta {
-            name: Some(format!("chisel-{}", service_name)),
+            name: Some(format!("chisel-{service_name}")),
             owner_references: Some(vec![oref]),
             // namespace: exit_node.metadata.namespace.clone(),
-            ..ObjectMeta::default()
+            ..Default::default()
         },
         spec: Some(DeploymentSpec {
             template: create_pod_template(source, exit_node).await?,

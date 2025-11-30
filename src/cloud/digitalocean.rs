@@ -181,7 +181,7 @@ impl Provisioner for DigitalOceanProvisioner {
             .and_then(|status| status.id.as_ref());
 
         if let Some(droplet_id) = droplet_id {
-            info!("Deleting droplet with ID {}", droplet_id);
+            info!("Deleting droplet with ID {droplet_id}");
             api.delete_droplet_async(droplet_id).await?;
         }
         Ok(())
