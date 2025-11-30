@@ -1,9 +1,7 @@
 use super::{cloud_init::generate_cloud_init_config, Provisioner};
 use crate::{
     cloud::CHISEL_PORT,
-    ops::{
-        parse_provisioner_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_ANNOTATION,
-    },
+    ops::{parse_provisioner_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_ANNOTATION},
 };
 use async_trait::async_trait;
 use aws_config::{BehaviorVersion, Region};
