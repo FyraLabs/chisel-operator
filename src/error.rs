@@ -14,6 +14,9 @@ pub enum ReconcileError {
     #[error("There are no ports set on this LoadBalancer")]
     NoPortsSet,
 
+    #[error("The service does not have a ClusterIP assigned")]
+    NoClusterIP,
+
     #[error("The provided cloud provisioner was not found in the cluster")]
     CloudProvisionerNotFound,
     #[error("The secret keys for the cloud provisioner were not found in the cluster")]
