@@ -157,32 +157,11 @@ async fn find_exit_node_from_annotation(
         });
     }
 
-    // No namespace specified - first try the service's namespace
+    // No namespace specified - only search the service's namespace
+    // For cross-namespace lookup, use explicit "namespace/name" format
     let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), og_namespace);
-    if let Ok(node_list) = nodes.list(&ListParams::default().timeout(30)).await {
-        if let Some(node) = node_list.items.into_iter().find(|node| {
-            node.metadata
-                .name
-                .as_ref()
-                .map(|n| n == name)
-                .unwrap_or(false)
-        }) {
-            return Some(node);
-        }
-    }
-
-    // Not found in service's namespace, search all namespaces
-    debug!(
-        name = name,
-        og_namespace = og_namespace,
-        "Exit node not found in service namespace, searching all namespaces"
-    );
-    let all_nodes: Api<ExitNode> = Api::all(ctx.client.clone());
-    let all_node_list = all_nodes
-        .list(&ListParams::default().timeout(30))
-        .await
-        .ok()?;
-    all_node_list.items.into_iter().find(|node| {
+    let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
+    node_list.items.into_iter().find(|node| {
         node.metadata
             .name
             .as_ref()
