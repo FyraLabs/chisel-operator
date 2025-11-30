@@ -2,7 +2,7 @@
 
 use crate::{
     error::ReconcileError,
-    ops::{ExitNode, EXIT_NODE_PROXY_PROTOCOL_LABEL},
+    ops::{ExitNode, EXIT_NODE_PROXY_PROTOCOL_ANNOTATION},
 };
 use color_eyre::Result;
 use k8s_openapi::{
@@ -115,7 +115,7 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
 
     let proxy_protocol = svc.metadata.annotations.as_ref().and_then(|annotations| {
         annotations
-            .get(EXIT_NODE_PROXY_PROTOCOL_LABEL)
+            .get(EXIT_NODE_PROXY_PROTOCOL_ANNOTATION)
             .map(String::as_ref)
     }) == Some("true");
     let target_ip = if proxy_protocol { "RP" } else { "R" };

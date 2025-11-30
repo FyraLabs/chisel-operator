@@ -122,6 +122,34 @@ A Helm chart is also available as an OCI artifact. You can install it using the 
 helm install chisel-operator oci://ghcr.io/fyralabs/chisel-operator/chisel-operator
 ```
 
+### Helm chart configuration examples
+
+If you'd like to customize the operator pod further (for example, mount a config or add additional env vars), you can pass values to the Helm chart. Examples:
+
+1) Mount a configmap and add an env var that points to the mounted file:
+
+```yaml
+extraVolumes:
+  - name: custom-config
+    configMap:
+      name: my-configmap
+extraVolumeMounts:
+  - name: custom-config
+    mountPath: /etc/chisel
+extraEnv:
+  - name: CHISEL_CONFIG
+    value: "/etc/chisel/config.yaml"
+```
+
+Apply these values with `helm install -f my-values.yaml ...` or `helm upgrade`.
+
+You can also set the container's default logger via the `logger` chart value:
+
+```yaml
+logger: "json"
+```
+
+
 ## Usage
 
 ### Restricting reconciliation to a LoadBalancer class
@@ -241,6 +269,44 @@ spec:
 > NOTE: You can also use this for manually-provisioned exit nodes
 
 > NOTE: If you do not specify the annotation, the operator will allocate the first available exit node for you.
+
+### Migration note: Labels vs Annotations (v0.7.0)
+
+If you were previously using labels to direct services to an exit node (for example, setting the `chisel-operator.io/exit-node-name` key in `metadata.labels`), please switch to annotations instead — v0.7.0 will only check annotations for `chisel-operator.io/exit-node-name`. To migrate, remove the label and add it as an annotation on your Service resource:
+
+```yaml
+metadata:
+  annotations:
+    chisel-operator.io/exit-node-name: "my-exit-node"
+```
+
+If the `ExitNode` is in a different namespace than the service, use `namespace/name` format (e.g., `infrastructure/shared-exit`).
+
+### JSON logging for Kubernetes
+
+The operator defaults to `logfmt` output across environments. If you're running the operator on Kubernetes and would prefer JSON logs (easier for Loki, VictoriaLogs, etc.), set the `LOGGER` environment variable to `json` in the pod spec.
+
+You can override this behavior by setting the `LOGGER` environment variable to one of the following values:
+- `logfmt` (default on non-Kubernetes environments)
+- `pretty`
+- `json`
+- `compact`
+
+For example, to force pretty logs on a k8s pod, set the container's env var:
+
+```yaml
+env:
+  - name: LOGGER
+    value: "pretty"
+```
+
+You can set `LOGGER` to one of the following values:
+- `logfmt` (default)
+- `pretty`
+- `json`
+- `compact`
+
+
 
 ### Provisioning Chisel manually
 

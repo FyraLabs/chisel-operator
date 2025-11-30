@@ -1,7 +1,9 @@
 use super::{cloud_init::generate_cloud_init_config, Provisioner};
 use crate::{
     cloud::CHISEL_PORT,
-    ops::{parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL},
+    ops::{
+        parse_provisioner_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_ANNOTATION,
+    },
 };
 use async_trait::async_trait;
 use aws_config::{BehaviorVersion, Region};
@@ -118,7 +120,7 @@ impl Provisioner for AWSProvisioner {
             .metadata
             .annotations
             .as_ref()
-            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_ANNOTATION))
             .ok_or_else(|| {
                 anyhow!(
                     "No provisioner found in annotations for exit node {}",
@@ -145,7 +147,7 @@ impl Provisioner for AWSProvisioner {
 
         let current_namespace = exit_node.namespace().unwrap();
         let (_provisioner_namespace, provsioner_name) =
-            parse_provisioner_label_value(&current_namespace, provisioner);
+            parse_provisioner_value(&current_namespace, provisioner);
 
         let name = format!(
             "{}-{}",

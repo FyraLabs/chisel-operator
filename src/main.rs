@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Path;
 
 use chisel_operator::daemon;
 use color_eyre::Result;
@@ -50,7 +51,10 @@ async fn main() -> Result<()> {
     color_eyre::install()?;
     dotenvy::dotenv().ok();
 
-    let logger_env = env::var("LOGGER").unwrap_or_else(|_| "logfmt".to_string());
+    // Default to logfmt by default; JSON is recommended in k8s environments but not forced.
+    // Users can still override the logger via the LOGGER environment variable.
+    let default_logger = "logfmt";
+    let logger_env = env::var("LOGGER").unwrap_or_else(|_| default_logger.to_string());
 
     let logfmt_logger = tracing_logfmt::layer().boxed();
 
@@ -95,7 +99,9 @@ async fn main() -> Result<()> {
         "Fyra Labs Chisel Operator, version {}",
         env!("CARGO_PKG_VERSION")
     );
+    let is_k8s = running_in_kubernetes_env();
     info!("Starting up...");
+    info!(logger = %logger_env, running_in_kubernetes = is_k8s, "Using logger");
 
     // Set up a handler for graceful pod termination
     tokio::spawn(async move {
@@ -108,4 +114,16 @@ async fn main() -> Result<()> {
     });
 
     daemon::run().await
+}
+
+fn running_in_kubernetes_env() -> bool {
+    // If the pod service host or port is present, we're very likely running inside Kubernetes.
+    // Additionally, the service account path is present in k8s pods by default.
+    if env::var("KUBERNETES_SERVICE_HOST").is_ok() || env::var("KUBERNETES_SERVICE_PORT").is_ok() {
+        return true;
+    }
+    if Path::new("/var/run/secrets/kubernetes.io/serviceaccount/token").exists() {
+        return true;
+    }
+    false
 }

@@ -12,6 +12,8 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   # tag:
+  # LOGGER default: set a default logger for the container if desired. By default the operator uses 'logfmt' but this value will only be used if you configure the container to use IMAGE env or override in Helm templates.
+  logger: "" # Optional override for the container LOGGER env var; empty means no override
 
 imagePullSecrets: []
 nameOverride: ""
@@ -27,7 +29,6 @@ serviceAccount:
   name: ""
 
 podAnnotations: {}
-
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -53,3 +54,30 @@ loadBalancerClass: ""
 
 # Create CRDs for Chisel Operator
 createCrds: true
+
+# Set the logger used by the operator.
+# Valid options are: "logfmt", "pretty", "json", "compact"
+# Default is "logfmt"
+logger: "logfmt"
+
+# Extra environment variables to add to the operator container
+# Format:
+# extraEnv:
+#   - name: MY_VAR
+#     value: "value"
+extraEnv: []
+
+# Extra volumes to mount on pod level (standard k8s Volume objects)
+# Example:
+# extraVolumes:
+#   - name: custom-config
+#     configMap:
+#       name: my-config
+extraVolumes: []
+
+# Extra volume mounts for the operator's container
+# Example:
+# extraVolumeMounts:
+#   - name: custom-config
+#     mountPath: /etc/chisel
+extraVolumeMounts: []

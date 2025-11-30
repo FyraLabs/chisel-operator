@@ -50,13 +50,53 @@ spec:
 
 Leaving the value empty (or omitting the field) continues to expose the service through any unfiltered operator instance.
 
-Additionally, there's also a commented out annotation, `chisel-operator.io/exit-node-name`.
-By default, Chisel Operator will automatically select a random, unused `ExitNode` on the cluster if a cloud provisioner or exit node annotation is not set.
-If you'd like to force the service to a particular exit node, you can uncomment out the annotation, setting it to the name of the `ExitNode` to target.
+## Selecting a specific exit node
 
-> As of Chisel Operator 0.4.0, you can now force multiple services to use the same exit node by setting the `chisel-operator.io/exit-node-name` annotation to the same value on each service, this can be useful by allowing you to group services together on the same exit node, saving resources by only running one exit node for multiple services.
+By default, Chisel Operator will automatically select an available `ExitNode` on the cluster if no exit node annotation is set.
+If you'd like to force the service to use a particular exit node, you can set the `chisel-operator.io/exit-node-name` annotation to the name of the `ExitNode` to target.
 
-<!-- TODO: cross namespace -->
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  annotations:
+    chisel-operator.io/exit-node-name: "my-exit-node"
+spec:
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+```
+
+> **Note:** As of Chisel Operator 0.4.0, you can force multiple services to use the same exit node by setting the `chisel-operator.io/exit-node-name` annotation to the same value on each service. This allows you to group services together on the same exit node, saving resources by only running one exit node for multiple services.
+
+### Cross-namespace exit node selection
+
+If your `ExitNode` is in a different namespace than your service, you must specify the namespace in the annotation value using the format `namespace/name`.
+
+For example, if you have an `ExitNode` named `shared-exit` in the `infrastructure` namespace, and your service is in the `default` namespace:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: whoami
+  namespace: default
+  annotations:
+    chisel-operator.io/exit-node-name: "infrastructure/shared-exit"
+spec:
+  selector:
+    app: whoami
+  ports:
+    - port: 80
+      targetPort: 80
+  type: LoadBalancer
+```
+
+If you omit the namespace prefix, the operator will look for the exit node in the same namespace as the service.
 
 Let's look at another example, this time using the automatic cloud provisioning functionality:
 
@@ -84,3 +124,9 @@ Please note that if the provisioner is in a different namespace than the service
 For example, if the provisioner is in the `testing` namespace and has the name `my-do-provisioner`, the annotation value would be: `testing/my-do-provisioner`.
 
 That's all for now!
+
+## Operator logging
+
+The operator defaults to `logfmt`. If you're running on Kubernetes and want JSON logs for easy ingestion into Loki, VictoriaLogs, or similar systems, set `LOGGER` to `json`.
+
+You can override this behavior with the `LOGGER` environment variable (valid values: `logfmt`, `pretty`, `json`, `compact`).
