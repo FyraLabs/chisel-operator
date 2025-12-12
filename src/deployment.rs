@@ -20,32 +20,6 @@ use tracing::{info, instrument, trace};
 
 const CHISEL_IMAGE: &str = "jpillora/chisel";
 
-/// The function takes a ServicePort struct and returns a string representation of the target port
-/// and protocol (if specified).
-///
-/// Arguments:
-///
-/// * `svcport`: `svcport` is a variable of type `ServicePort`, which represents a service port in
-///   Kubernetes. The function extracts the target port (what pods listen on) for use in chisel tunnels.
-///
-/// Returns:
-///
-/// a string that represents the target port with protocol suffix. If a numeric target_port is specified,
-/// it is used; otherwise falls back to the service port. Named target ports (strings) fall back to
-/// the service port since they cannot be resolved without pod container port information.
-fn get_target_port(svcport: &ServicePort) -> i32 {
-    use k8s_openapi::apimachinery::pkg::util::intstr::IntOrString;
-
-    // Use numeric target_port if specified, otherwise fall back to the service port.
-    // Named ports (strings like "web", "http") cannot be resolved here since we'd need
-    // to look up the Pod's container ports, so we fall back to service port.
-    match &svcport.target_port {
-        Some(IntOrString::Int(p)) => *p,
-        Some(IntOrString::String(_)) => svcport.port, // Can't resolve named ports
-        None => svcport.port,
-    }
-}
-
 fn get_protocol_suffix(svcport: &ServicePort) -> &'static str {
     svcport
         .protocol
@@ -128,10 +102,17 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
         .ok_or(ReconcileError::NoPortsSet)?
         .iter()
         .map(|p| {
-            // The target port is what we expose externally and what the backend listens on
-            let target_port = get_target_port(p);
+            // service_port = what the Service/ClusterIP listens on
+            // (targetPort is only used internally by k8s to forward to pods)
+            // Chisel connects to ClusterIP:service_port, k8s handles the rest
+
+            // NOTE: Reverted from targetPort to using port directly to avoid confusion.
+            // Turns out targetPort is meant for accessing the pods, not the Service itself.
+
+            // If anyone knows the specifics of how CNIs actually handle this, please enlighten me.
+            let service_port = p.port;
             let protocol = get_protocol_suffix(p);
-            format!("{target_ip}:{target_port}:{cluster_ip}:{target_port}{protocol}")
+            format!("{target_ip}:{service_port}:{cluster_ip}:{service_port}{protocol}")
         })
         .collect();
 
