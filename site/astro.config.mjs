@@ -28,9 +28,11 @@ export default defineConfig({
         },
       ],
       sidebar: [
+
         {
           label: "Guides",
           items: [
+            { label: "Introduction", link: "/guides/introduction/" },
             { label: "Installation", link: "/guides/installation/" },
             {
               label: "Exposing a Service",
