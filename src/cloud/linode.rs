@@ -1,6 +1,6 @@
 use super::{cloud_init::generate_cloud_init_config, Provisioner};
 use crate::ops::{
-    parse_provisioner_label_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_LABEL,
+    parse_provisioner_value, ExitNode, ExitNodeStatus, EXIT_NODE_PROVISIONER_ANNOTATION,
 };
 use async_trait::async_trait;
 use base64::Engine;
@@ -69,12 +69,12 @@ impl Provisioner for LinodeProvisioner {
             .metadata
             .annotations
             .as_ref()
-            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_ANNOTATION))
             .unwrap();
 
         let current_namespace = exit_node.namespace().unwrap();
         let (_provisioner_namespace, provsioner_name) =
-            parse_provisioner_label_value(&current_namespace, provisioner);
+            parse_provisioner_value(&current_namespace, provisioner);
 
         let name: String = format!(
             "{}-{}",
@@ -92,7 +92,7 @@ impl Provisioner for LinodeProvisioner {
             .root_pass(root_password)
             .label(&name)
             .user_data(&user_data)
-            .tags(vec![format!("chisel-operator-provisioner:{}", provisioner)])
+            .tags(vec![format!("chisel-operator-provisioner:{provisioner}")])
             .image(IMAGE_ID)
             .booted(true)
             .run_async()
@@ -143,7 +143,7 @@ impl Provisioner for LinodeProvisioner {
         // okay, so Linode IDs will be u64, so let's parse it
 
         if let Some(instance_id) = instance_id {
-            info!("Deleting Linode instance with ID {}", instance_id);
+            info!("Deleting Linode instance with ID {instance_id}");
             api.delete_instance_async(instance_id).await?;
         }
 

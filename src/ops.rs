@@ -12,11 +12,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-pub const EXIT_NODE_NAME_LABEL: &str = "chisel-operator.io/exit-node-name";
-pub const EXIT_NODE_PROVISIONER_LABEL: &str = "chisel-operator.io/exit-node-provisioner";
-pub const EXIT_NODE_PROXY_PROTOCOL_LABEL: &str = "chisel-operator.io/proxy-protocol";
+pub const EXIT_NODE_NAME_ANNOTATION: &str = "chisel-operator.io/exit-node-name";
+pub const EXIT_NODE_PROVISIONER_ANNOTATION: &str = "chisel-operator.io/exit-node-provisioner";
+pub const EXIT_NODE_PROXY_PROTOCOL_ANNOTATION: &str = "chisel-operator.io/proxy-protocol";
 
-pub fn parse_provisioner_label_value<'a>(
+pub fn parse_provisioner_value<'a>(
     default_namespace: &'a str,
     value: &'a str,
 ) -> (&'a str, &'a str) {
@@ -243,23 +243,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_provisioner_label_value_with_namespace() {
-        let (namespace, name) =
-            parse_provisioner_label_value("default", "kube-system/cappy-chisel");
+    fn test_parse_provisioner_value_with_namespace() {
+        let (namespace, name) = parse_provisioner_value("default", "kube-system/cappy-chisel");
         assert_eq!(namespace, "kube-system");
         assert_eq!(name, "cappy-chisel");
     }
 
     #[test]
-    fn test_parse_provisioner_label_value_without_namespace() {
-        let (namespace, name) = parse_provisioner_label_value("default", "cappy-chisel");
+    fn test_parse_provisioner_value_without_namespace() {
+        let (namespace, name) = parse_provisioner_value("default", "cappy-chisel");
         assert_eq!(namespace, "default");
         assert_eq!(name, "cappy-chisel");
     }
 
     #[test]
-    fn test_parse_provisioner_label_value_with_different_default_namespace() {
-        let (namespace, name) = parse_provisioner_label_value("my-namespace", "exit-node-1");
+    fn test_parse_provisioner_value_with_different_default_namespace() {
+        let (namespace, name) = parse_provisioner_value("my-namespace", "exit-node-1");
         assert_eq!(namespace, "my-namespace");
         assert_eq!(name, "exit-node-1");
     }

@@ -30,13 +30,31 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- with .Values.loadBalancerClass }}
+          {{- if or (ne .Values.loadBalancerClass "") (ne .Values.logger "") (gt (len .Values.extraEnv) 0) }}
           env:
+            {{- if .Values.loadBalancerClass }}
             - name: LOAD_BALANCER_CLASS
-              value: {{ . | quote }}
+              value: {{ .Values.loadBalancerClass | quote }}
+            {{- end }}
+            {{- if .Values.logger }}
+            - name: LOGGER
+              value: {{ .Values.logger | quote }}
+            {{- end }}
+            {{- if .Values.extraEnv }}
+            {{- toYaml .Values.extraEnv | nindent 12 }}
+            {{- end }}
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+          {{- end }}
+
+      {{- if .Values.extraVolumes }}
+      volumes:
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+      {{- end }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:

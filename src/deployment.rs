@@ -2,7 +2,7 @@
 
 use crate::{
     error::ReconcileError,
-    ops::{ExitNode, EXIT_NODE_PROXY_PROTOCOL_LABEL},
+    ops::{ExitNode, EXIT_NODE_PROXY_PROTOCOL_ANNOTATION},
 };
 use color_eyre::Result;
 use k8s_openapi::{
@@ -15,41 +15,21 @@ use k8s_openapi::{
     },
     apimachinery::pkg::apis::meta::v1::LabelSelector,
 };
-use kube::{api::ResourceExt, core::ObjectMeta, error::ErrorResponse, Resource};
+use kube::{core::ObjectMeta, error::ErrorResponse, Resource};
 use tracing::{info, instrument, trace};
 
 const CHISEL_IMAGE: &str = "jpillora/chisel";
 
-/// The function takes a ServicePort struct and returns a string representation of the port number and
-/// protocol (if specified).
-///
-/// Arguments:
-///
-/// * `svcport`: `svcport` is a variable of type `ServicePort`, which is likely a struct or enum that
-///   represents a service port in a network application. The function `convert_service_port` takes this
-///   `svcport` as input and returns a string representation of the port number and protocol (if
-///   specified).
-///
-/// Returns:
-///
-/// a string that represents the service port. The string contains the port number and, if applicable,
-/// the protocol (TCP or UDP) in the format "port/protocol".
-fn convert_service_port(svcport: ServicePort) -> String {
-    let mut port = String::new();
-
-    // get port number
-    port.push_str(&svcport.port.to_string());
-
-    if let Some(protocol) = svcport.protocol {
-        match protocol.as_str() {
-            // todo: we probably want to imply none by default
-            "TCP" => port.push_str("/tcp"),
-            "UDP" => port.push_str("/udp"),
-            _ => (),
-        };
-    }
-
-    port
+fn get_protocol_suffix(svcport: &ServicePort) -> &'static str {
+    svcport
+        .protocol
+        .as_ref()
+        .map(|p| match p.as_str() {
+            "TCP" => "/tcp",
+            "UDP" => "/udp",
+            _ => "",
+        })
+        .unwrap_or("")
 }
 
 /// This function generates a remote argument string using an ExitNode's host and port information.
@@ -76,11 +56,11 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 
     // Determine if the host is an IPv6 address and format accordingly
     let formatted_host = match host.parse::<IpAddr>() {
-        Ok(IpAddr::V6(_)) => format!("[{}]", host),
+        Ok(IpAddr::V6(_)) => format!("[{host}]"),
         _ => host.to_string(),
     };
 
-    let output = format!("{}:{}", formatted_host, node.spec.port);
+    let output = format!("{formatted_host}:{}", node.spec.port);
     trace!(output = ?output, "Output");
     output
 }
@@ -98,27 +78,19 @@ pub fn generate_remote_arg(node: &ExitNode) -> String {
 /// a `Result` containing a `Vec` of `String`s. The `Vec` contains arguments for a tunnel, which are
 /// generated based on the input `Service`.
 pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError> {
-    // We can unwrap safely since Service is guaranteed to have a name
-    let service_name = svc.metadata.name.clone().unwrap();
-    // We can unwrap safely since Service is namespaced scoped
-    let service_namespace = svc.namespace().unwrap();
-
-    // this feels kind of janky, will need to refactor this later
-
-    // check if there's a custom IP set
-    // let target_ip = svc
-    //     .spec
-    //     .as_ref()
-    //     .map(|spec| spec.load_balancer_ip.clone())
-    //     .flatten()
-    //     .unwrap_or_else(|| "R".to_string());
-
     let proxy_protocol = svc.metadata.annotations.as_ref().and_then(|annotations| {
         annotations
-            .get(EXIT_NODE_PROXY_PROTOCOL_LABEL)
+            .get(EXIT_NODE_PROXY_PROTOCOL_ANNOTATION)
             .map(String::as_ref)
     }) == Some("true");
     let target_ip = if proxy_protocol { "RP" } else { "R" };
+
+    // Use ClusterIP directly instead of DNS name for more reliable routing
+    let cluster_ip = svc
+        .spec
+        .as_ref()
+        .and_then(|spec| spec.cluster_ip.as_ref())
+        .ok_or(ReconcileError::NoClusterIP)?;
 
     // We can unwrap safely since Service is guaranteed to have a spec
     let ports = svc
@@ -130,14 +102,17 @@ pub fn generate_tunnel_args(svc: &Service) -> Result<Vec<String>, ReconcileError
         .ok_or(ReconcileError::NoPortsSet)?
         .iter()
         .map(|p| {
-            format!(
-                "{}:{}:{}.{}:{}",
-                target_ip,
-                p.port,
-                service_name,
-                service_namespace,
-                convert_service_port(p.clone())
-            )
+            // service_port = what the Service/ClusterIP listens on
+            // (targetPort is only used internally by k8s to forward to pods)
+            // Chisel connects to ClusterIP:service_port, k8s handles the rest
+
+            // NOTE: Reverted from targetPort to using port directly to avoid confusion.
+            // Turns out targetPort is meant for accessing the pods, not the Service itself.
+
+            // If anyone knows the specifics of how CNIs actually handle this, please enlighten me.
+            let service_port = p.port;
+            let protocol = get_protocol_suffix(p);
+            format!("{target_ip}:{service_port}:{cluster_ip}:{service_port}{protocol}")
         })
         .collect();
 
@@ -289,10 +264,10 @@ pub async fn create_owned_deployment(
 
     Ok(Deployment {
         metadata: ObjectMeta {
-            name: Some(format!("chisel-{}", service_name)),
+            name: Some(format!("chisel-{service_name}")),
             owner_references: Some(vec![oref]),
             // namespace: exit_node.metadata.namespace.clone(),
-            ..ObjectMeta::default()
+            ..Default::default()
         },
         spec: Some(DeploymentSpec {
             template: create_pod_template(source, exit_node).await?,

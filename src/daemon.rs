@@ -51,7 +51,7 @@ use tracing::{debug, error, info, instrument, trace, warn};
 use crate::{
     cloud::{pwgen::generate_password, Provisioner},
     ops::{
-        parse_provisioner_label_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
+        parse_provisioner_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
         EXIT_NODE_NAME_LABEL, EXIT_NODE_PROVISIONER_LABEL, EXIT_NODE_PROXY_PROTOCOL_LABEL,
     },
 };
@@ -131,20 +131,35 @@ pub struct Context {
 ///
 /// A tuple containing the namespace and name as string slices.
 #[instrument(skip(ctx))]
-async fn find_exit_node_from_label(
+async fn find_exit_node_from_annotation(
     ctx: Arc<Context>,
     query: &str,
     og_namespace: &str,
 ) -> Option<ExitNode> {
     // parse the query to get the namespace and name
-    let (namespace, name) = if let Some((ns, nm)) = query.split_once('/') {
-        (ns, nm)
+    let (explicit_namespace, name) = if let Some((ns, nm)) = query.split_once('/') {
+        (Some(ns), nm)
     } else {
-        // if the query does not contain a '/', use the original namespace
-        (og_namespace, query)
+        // if the query does not contain a '/', we'll search more broadly
+        (None, query)
     };
 
-    let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), namespace);
+    if let Some(ns) = explicit_namespace {
+        // Namespace explicitly specified, search only there
+        let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), ns);
+        let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
+        return node_list.items.into_iter().find(|node| {
+            node.metadata
+                .name
+                .as_ref()
+                .map(|n| n == name)
+                .unwrap_or(false)
+        });
+    }
+
+    // No namespace specified - only search the service's namespace
+    // For cross-namespace lookup, use explicit "namespace/name" format
+    let nodes: Api<ExitNode> = Api::namespaced(ctx.client.clone(), og_namespace);
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
     node_list.items.into_iter().find(|node| {
         node.metadata
@@ -156,15 +171,15 @@ async fn find_exit_node_from_label(
 }
 
 #[instrument(skip(ctx))]
-async fn find_exit_node_provisioner_from_label(
+async fn find_exit_node_provisioner_from_annotation(
     ctx: Arc<Context>,
     default_namespace: &str,
     query: &str,
 ) -> Option<ExitNodeProvisioner> {
-    let span = tracing::debug_span!("find_exit_node_provisioner_from_label", ?query);
+    let span = tracing::debug_span!("find_exit_node_provisioner_from_annotation", ?query);
     let _enter = span.enter();
 
-    let (namespace, name) = parse_provisioner_label_value(default_namespace, query);
+    let (namespace, name) = parse_provisioner_value(default_namespace, query);
 
     let nodes: Api<ExitNodeProvisioner> = Api::namespaced(ctx.client.clone(), namespace);
     let node_list = nodes.list(&ListParams::default().timeout(30)).await.ok()?;
@@ -187,7 +202,7 @@ async fn check_exit_node_managed(node: &ExitNode) -> bool {
     node.metadata
         .annotations
         .as_ref()
-        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
+        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_ANNOTATION))
         .unwrap_or(false)
 }
 #[instrument]
@@ -197,7 +212,7 @@ async fn check_service_managed(service: &Service) -> bool {
         .metadata
         .annotations
         .as_ref()
-        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL))
+        .map(|annotations| annotations.contains_key(EXIT_NODE_PROVISIONER_ANNOTATION))
         .unwrap_or(false)
 }
 
@@ -261,19 +276,19 @@ async fn select_exit_node_local(
         return Ok(node);
     }
 
-    // if service has label with exit node name, use that and error if not found
+    // if service has annotation with exit node name, use that and error if not found
     let exit_node_selection = {
         if let Some(exit_node_name) = service
             .metadata
-            .labels
+            .annotations
             .as_ref()
-            .and_then(|labels| labels.get(EXIT_NODE_NAME_LABEL))
+            .and_then(|annotations| annotations.get(EXIT_NODE_NAME_ANNOTATION))
         {
             info!(
                 ?exit_node_name,
                 "Service explicitly set to use a named exit node, using that"
             );
-            find_exit_node_from_label(
+            find_exit_node_from_annotation(
                 ctx.clone(),
                 exit_node_name,
                 &service.namespace().expect("Service namespace not found"),
@@ -296,7 +311,7 @@ async fn select_exit_node_local(
                         .annotations
                         .as_ref()
                         .map(|annotations: &BTreeMap<String, String>| {
-                            annotations.contains_key(EXIT_NODE_PROVISIONER_LABEL)
+                            annotations.contains_key(EXIT_NODE_PROVISIONER_ANNOTATION)
                         })
                         .unwrap_or(false);
 
@@ -354,17 +369,17 @@ async fn exit_node_for_service(
         .metadata
         .annotations
         .as_ref()
-        .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+        .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_ANNOTATION))
         .ok_or_else(|| ReconcileError::CloudProvisionerNotFound)?;
 
     let exit_node_name = service
         .metadata
         .annotations
         .as_ref()
-        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
+        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_ANNOTATION))
         .unwrap_or({
             let service_name = service.metadata.name.as_ref().unwrap();
-            &format!("service-{}", service_name)
+            &format!("service-{service_name}")
         })
         .to_owned();
 
@@ -389,7 +404,7 @@ async fn exit_node_for_service(
             annotations: Some({
                 let mut map = BTreeMap::new();
                 map.insert(
-                    EXIT_NODE_PROVISIONER_LABEL.to_string(),
+                    EXIT_NODE_PROVISIONER_ANNOTATION.to_string(),
                     format!("{}/{}", service.namespace().unwrap(), provisioner_name), // Fixes #38
                 );
                 map
@@ -474,24 +489,38 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     let node_list = nodes.list(&ListParams::default().timeout(30)).await?;
 
-    // Check if service has explicitly set an exit node name
-    let named_exit_node = obj
+    // Check if service has explicitly set an exit node name via annotation
+    let exit_node_name_from_meta = obj
         .metadata
         .annotations
         .as_ref()
-        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_LABEL))
-        .and_then(|exit_node_name| {
-            // Parse the exit node name, which can be in the format "namespace/name" or just "name"
-            let service_namespace = obj.namespace().unwrap();
-            let (target_namespace, target_name) =
-                parse_provisioner_label_value(&service_namespace, exit_node_name);
+        .and_then(|annotations| annotations.get(EXIT_NODE_NAME_ANNOTATION));
 
-            // Find the exit node with the matching name and namespace
-            node_list.iter().find(|node| {
-                node.metadata.name.as_deref() == Some(target_name)
-                    && node.metadata.namespace.as_deref() == Some(target_namespace)
-            })
+    let named_exit_node = if let Some(exit_node_name) = exit_node_name_from_meta {
+        let service_namespace = obj.namespace().unwrap();
+
+        // First try to find in the pre-fetched node_list (for efficiency)
+        let (target_namespace, target_name) =
+            parse_provisioner_value(&service_namespace, exit_node_name);
+
+        let found_in_list = node_list.iter().find(|node| {
+            node.metadata.name.as_deref() == Some(target_name)
+                && node.metadata.namespace.as_deref() == Some(target_namespace)
         });
+
+        if let Some(node) = found_in_list {
+            Some(node.clone())
+        } else {
+            // Not found in pre-fetched list, do a fresh lookup that searches all namespaces
+            debug!(
+                exit_node_name = exit_node_name,
+                "Exit node not in cached list, doing fresh lookup"
+            );
+            find_exit_node_from_annotation(ctx.clone(), exit_node_name, &service_namespace).await
+        }
+    } else {
+        None
+    };
 
     // XXX: Exit node manifest generation starts here
     let node = {
@@ -634,17 +663,33 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
     .map_err(|e| {
         crate::error::ReconcileError::KubeError(kube::Error::Api(kube::error::ErrorResponse {
             code: 500,
-            message: format!("Error applying finalizer for {}", obj.name_any()),
+            message: "Error applying finalizer".to_string(),
             reason: e.to_string(),
             status: "Failure".to_string(),
         }))
     })
 }
 
+/// Determines the requeue delay based on error type.
+/// Some errors like NoAvailableExitNodes should wait longer since they're likely
+/// waiting for external state to change.
+fn get_error_requeue_duration(err: &ReconcileError) -> Duration {
+    match err {
+        // These errors are likely transient and may resolve with external changes
+        // Use a longer backoff to avoid tight retry loops
+        ReconcileError::NoAvailableExitNodes => Duration::from_secs(30),
+        ReconcileError::CloudProvisionerNotFound => Duration::from_secs(60),
+        ReconcileError::CloudProvisionerSecretNotFound => Duration::from_secs(30),
+        // For other errors, use a shorter retry interval
+        _ => Duration::from_secs(10),
+    }
+}
+
 #[instrument(skip(_object, err, _ctx))]
 fn error_policy(_object: Arc<Service>, err: &ReconcileError, _ctx: Arc<Context>) -> Action {
-    error!(err = ?err);
-    Action::requeue(Duration::from_secs(5))
+    let requeue_duration = get_error_requeue_duration(err);
+    error!(err = ?err, requeue_after_secs = requeue_duration.as_secs(), "Reconciliation error, will retry");
+    Action::requeue(requeue_duration)
 }
 
 #[instrument(skip(_object, err, _ctx))]
@@ -653,8 +698,9 @@ fn error_policy_exit_node(
     err: &ReconcileError,
     _ctx: Arc<Context>,
 ) -> Action {
-    error!(err = ?err);
-    Action::requeue(Duration::from_secs(5))
+    let requeue_duration = get_error_requeue_duration(err);
+    error!(err = ?err, requeue_after_secs = requeue_duration.as_secs(), "Reconciliation error, will retry");
+    Action::requeue(requeue_duration)
 }
 const UNMANAGED_PROVISIONER: &str = "unmanaged";
 
@@ -705,7 +751,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             .metadata
             .annotations
             .as_ref()
-            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_LABEL))
+            .and_then(|annotations| annotations.get(EXIT_NODE_PROVISIONER_ANNOTATION))
             .unwrap();
 
         // We should assume that every managed exit node comes with an `auth` key, which is a reference to a Secret
@@ -732,7 +778,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
 
                 let old_provider = status.provider.clone();
 
-                let old_provisioner = find_exit_node_provisioner_from_label(
+                let old_provisioner = find_exit_node_provisioner_from_annotation(
                     ctx.clone(),
                     &obj.namespace().unwrap(),
                     &old_provider,
@@ -775,7 +821,7 @@ async fn reconcile_nodes(obj: Arc<ExitNode>, ctx: Arc<Context>) -> Result<Action
             }
         }
 
-        let provisioner = find_exit_node_provisioner_from_label(
+        let provisioner = find_exit_node_provisioner_from_annotation(
             ctx.clone(),
             &obj.namespace().unwrap(),
             provisioner,
@@ -911,7 +957,7 @@ pub async fn run() -> color_eyre::Result<()> {
                         .annotations
                         .as_ref()
                         .unwrap_or(&BTreeMap::new())
-                        .get(EXIT_NODE_PROVISIONER_LABEL)
+                        .get(EXIT_NODE_PROVISIONER_ANNOTATION)
                         .map(String::as_str)
                         .map(ObjectRef::new)
                 },
@@ -940,7 +986,7 @@ pub async fn run() -> color_eyre::Result<()> {
                         .annotations
                         .as_ref()
                         .unwrap_or(&BTreeMap::new())
-                        .get(EXIT_NODE_PROVISIONER_LABEL)
+                        .get(EXIT_NODE_PROVISIONER_ANNOTATION)
                         .map(String::as_str)
                         .map(ObjectRef::new)
                 },

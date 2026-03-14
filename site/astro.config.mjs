@@ -21,16 +21,18 @@ export default defineConfig({
         {
           tag: "script",
           attrs: {
-            src: "https://plausible.fyralabs.com/js/script.js",
+            src: "https://plausible.fyralabs.com/js/script.outbound-links.js",
             "data-domain": "chisel.fyralabs.com",
             defer: true,
           },
         },
       ],
       sidebar: [
+
         {
           label: "Guides",
           items: [
+            { label: "Introduction", link: "/guides/introduction/" },
             { label: "Installation", link: "/guides/installation/" },
             {
               label: "Exposing a Service",
