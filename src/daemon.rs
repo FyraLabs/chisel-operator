@@ -574,7 +574,7 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
 
     let proxy_protocol = obj.metadata.annotations.as_ref().and_then(|annotations| {
         annotations
-            .get(EXIT_NODE_PROXY_PROTOCOL_LABEL)
+            .get(EXIT_NODE_PROXY_PROTOCOL_ANNOTATION)
             .map(String::as_ref)
     }) == Some("true");
 
