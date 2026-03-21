@@ -52,7 +52,7 @@ use crate::{
     cloud::{pwgen::generate_password, Provisioner},
     ops::{
         parse_provisioner_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
-        EXIT_NODE_NAME_ANNOTATION, EXIT_NODE_PROVISIONER_ANNOTATION, EXIT_NODE_PROXY_PROTOCOL_LABEL,
+        EXIT_NODE_NAME_ANNOTATION, EXIT_NODE_PROVISIONER_ANNOTATION, EXIT_NODE_PROXY_PROTOCOL_ANNOTATION,
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
