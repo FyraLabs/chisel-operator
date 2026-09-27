@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chisel-operator",
+  "compatibility_date": "2026-09-27",
+  "assets": {
+    "directory": "./dist",
+    // Serve Starlight's generated 404.html for unknown routes
+    "not_found_handling": "404-page"
+  }
+}

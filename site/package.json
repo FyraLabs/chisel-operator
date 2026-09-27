@@ -6,14 +6,18 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro check && astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "preview": "astro build && wrangler dev",
+    "astro": "astro",
+    "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {
+    "@astrojs/check": "^0.8.1",
     "@astrojs/starlight": "^0.21.3",
     "astro": "^4.16.18",
     "sharp": "^0.34.4",
-    "@astrojs/check": "^0.8.1",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.141.0"
   }
 }
