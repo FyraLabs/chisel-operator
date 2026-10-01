@@ -73,7 +73,7 @@ aws-smithy-runtime = { version = "1.7.8", default-features = false, features = [
     "client",
     "connector-hyper-0-14-x",
 ] }
-hyper-rustls = { version = "0.24.2", features = [
+hyper-rustls = { version = "0.27.7", features = [
     "http2",
     "webpki-roots",
     "webpki-tokio",
