@@ -52,7 +52,7 @@ use crate::{
     cloud::{pwgen::generate_password, Provisioner},
     ops::{
         parse_provisioner_value, ExitNode, ExitNodeProvisioner, ExitNodeSpec, ExitNodeStatus,
-        EXIT_NODE_NAME_ANNOTATION, EXIT_NODE_PROVISIONER_ANNOTATION,
+        EXIT_NODE_NAME_ANNOTATION, EXIT_NODE_PROVISIONER_ANNOTATION, EXIT_NODE_PROXY_PROTOCOL_ANNOTATION,
     },
 };
 use crate::{deployment::create_owned_deployment, error::ReconcileError};
@@ -572,11 +572,22 @@ async fn reconcile_svcs(obj: Arc<Service>, ctx: Arc<Context>) -> Result<Action, 
         (Some(exit_node_ip.clone()), None)
     };
 
+    let proxy_protocol = obj.metadata.annotations.as_ref().and_then(|annotations| {
+        annotations
+            .get(EXIT_NODE_PROXY_PROTOCOL_ANNOTATION)
+            .map(String::as_ref)
+    }) == Some("true");
+
     svc.status = Some(ServiceStatus {
         load_balancer: Some(LoadBalancerStatus {
             ingress: Some(vec![LoadBalancerIngress {
                 ip: ingress_ip,
                 hostname: ingress_hostname,
+                ip_mode: if proxy_protocol {
+                    Some("Proxy".to_string())
+                } else {
+                    None
+                },
                 ..Default::default()
             }]),
         }),
